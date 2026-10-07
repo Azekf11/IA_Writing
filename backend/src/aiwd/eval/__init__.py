@@ -1,5 +1,6 @@
 from aiwd.eval.metrics import (
     bootstrap_ci,
+    conformal_threshold,
     evaluate,
     expected_calibration_error,
     fpr_upper_bound,
@@ -10,6 +11,7 @@ from aiwd.eval.metrics import (
 
 __all__ = [
     "bootstrap_ci",
+    "conformal_threshold",
     "evaluate",
     "expected_calibration_error",
     "fpr_upper_bound",

@@ -8,6 +8,7 @@ so findings computed on the clean text can be highlighted in the original text.
 
 from __future__ import annotations
 
+import re
 import unicodedata
 from dataclasses import dataclass, field
 
@@ -39,6 +40,10 @@ _BOM = "\ufeff"
 _SPACING_ACUTE = "\u00b4"
 _NEWLINES = frozenset("\n\r\u2028\u2029\x85")
 
+_ASCII_WHITESPACE_RUN = re.compile(
+    "[" + re.escape("".join(chr(i) for i in range(128) if chr(i).isspace())) + "]+"
+)
+
 Char = tuple[str, int, int]
 
 
@@ -64,14 +69,49 @@ class NormalizedText:
         return self.starts[start], self.ends[end - 1]
 
 
-def normalize_text(text: str) -> NormalizedText:
-    flags = {
+def _empty_flags() -> dict[str, int]:
+    return {
         "invisible_chars": 0,
         "benign_invisibles": 0,
         "homoglyphs": 0,
         "homoglyph_words": 0,
         "nfkc_changes": 0,
     }
+
+
+def normalize_text(text: str) -> NormalizedText:
+    if text.isascii():
+        return _normalize_ascii(text)
+    return _normalize_general(text)
+
+
+def _normalize_ascii(text: str) -> NormalizedText:
+    """Fast path: for pure ASCII only whitespace collapsing can change anything."""
+    pieces: list[str] = []
+    starts: list[int] = []
+    ends: list[int] = []
+    pos = 0
+    for m in _ASCII_WHITESPACE_RUN.finditer(text):
+        s, e = m.span()
+        pieces.append(text[pos:s])
+        starts.extend(range(pos, s))
+        ends.extend(range(pos + 1, s + 1))
+        if s > 0 and e < len(text):
+            run = m.group()
+            newlines = run.count("\n") + run.count("\r") - run.count("\r\n")
+            replacement = "\n\n" if newlines >= 2 else ("\n" if newlines == 1 else " ")
+            pieces.append(replacement)
+            starts.extend([s] * len(replacement))
+            ends.extend([e] * len(replacement))
+        pos = e
+    pieces.append(text[pos:])
+    starts.extend(range(pos, len(text)))
+    ends.extend(range(pos + 1, len(text) + 1))
+    return NormalizedText(text="".join(pieces), starts=starts, ends=ends, flags=_empty_flags())
+
+
+def _normalize_general(text: str) -> NormalizedText:
+    flags = _empty_flags()
     chars = _drop_invisibles(text, flags)
     chars = _per_cluster(chars, "NFKC", flags)
     chars = _drop_attack_joiners(chars, flags)

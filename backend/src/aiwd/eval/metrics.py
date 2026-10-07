@@ -62,6 +62,29 @@ def threshold_at_fpr(human_scores: ArrayLike, target_fpr: float) -> float:
     return float(s[s.size - 1 - k])
 
 
+def conformal_threshold(human_scores: ArrayLike, target_fpr: float) -> tuple[float, int]:
+    """Threshold to apply to NEW texts, with expected FPR <= target_fpr (split conformal).
+
+    Allows k = floor(target * (n + 1)) - 1 calibration humans above the threshold.
+    Returns (threshold, k). Raises if there are too few humans (n < 1 / target - 1).
+    """
+    _check_rate(target_fpr, "target_fpr")
+    s = np.asarray(human_scores, dtype=float)
+    if s.ndim != 1 or s.size == 0:
+        raise ValueError("human_scores must be a non-empty 1-D array")
+    if not np.isfinite(s).all():
+        raise ValueError("human_scores must be finite")
+    k = math.floor(target_fpr * (s.size + 1) + 1e-9) - 1
+    if k < 0:
+        need = math.ceil(1 / target_fpr - 1)
+        raise ValueError(
+            f"{s.size} calibration humans are too few for a {target_fpr:g} FPR target "
+            f"(need at least {need})"
+        )
+    s = np.sort(s)
+    return float(s[s.size - 1 - k]), k
+
+
 def tpr_at_fpr(y_true: ArrayLike, scores: ArrayLike, target_fpr: float) -> dict[str, float]:
     """TPR at a threshold calibrated on the human scores (in-sample)."""
     y, s = _as_arrays(y_true, scores)

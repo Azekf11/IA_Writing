@@ -51,7 +51,7 @@ def download_raid(split: str = "train", include_adversarial: bool = False) -> Pa
     return target
 
 
-def _check_columns(columns) -> None:
+def check_columns(columns) -> None:
     missing = [c for c in REQUIRED_COLUMNS if c not in columns]
     if missing:
         raise ValueError(
@@ -67,7 +67,7 @@ def _clean(value: object) -> str | None:
 
 
 def raid_to_documents(df: pd.DataFrame) -> list[Document]:
-    _check_columns(df.columns)
+    check_columns(df.columns)
     keep = df["generation"].notna() & df["generation"].astype(str).str.strip().ne("")
     if (~keep).any():
         warnings.warn(f"dropped {(~keep).sum()} RAID rows with an empty generation", stacklevel=2)
@@ -105,12 +105,26 @@ def raid_to_documents(df: pd.DataFrame) -> list[Document]:
     return docs
 
 
+def csv_read_options(header) -> dict:
+    """Read ids and titles as text, and treat only empty cells as missing.
+
+    Without this, pandas may turn an id like "007" into 7.0, and the guessed type can
+    differ between chunks of the same file.
+    """
+    text_columns = ("id", "source_id", "adv_source_id", "title", "generation")
+    return {
+        "dtype": {c: str for c in text_columns if c in header},
+        "keep_default_na": False,
+        "na_values": [""],
+    }
+
+
 def read_raid_csv(path: str | Path) -> pd.DataFrame:
     """Read only the columns we use, which keeps memory reasonable on train_none.csv."""
     header = pd.read_csv(path, nrows=0).columns
-    _check_columns(header)
+    check_columns(header)
     usecols = [c for c in (*REQUIRED_COLUMNS, *OPTIONAL_COLUMNS) if c in header]
-    return pd.read_csv(path, usecols=usecols)
+    return pd.read_csv(path, usecols=usecols, **csv_read_options(header))
 
 
 def load_raid(
@@ -130,7 +144,7 @@ def load_raid(
 
 def sample_balanced(df: pd.DataFrame, per_domain: int, seed: int = 0) -> pd.DataFrame:
     """Up to `per_domain` human rows and `per_domain` AI rows for each domain."""
-    _check_columns(df.columns)
+    check_columns(df.columns)
     is_human = df["model"] == "human"
     parts = []
     for _, group in df.groupby([df["domain"], is_human], sort=True):
