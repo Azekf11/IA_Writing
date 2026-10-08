@@ -24,11 +24,14 @@ def main() -> None:
     parser.add_argument("--dataset", default=str(BACKEND / "data/datasets/raid-v1.parquet"))
     parser.add_argument("--out-dir", default=str(BACKEND / "reports"))
     parser.add_argument("--fprs", type=float, nargs="+", default=[0.01, 0.05])
+    parser.add_argument(
+        "--ai-fraction", type=float, default=1.0, help="same value as used when scoring"
+    )
     args = parser.parse_args()
 
     try:
         dataset, scores = load_dataset(args.dataset), load_scores(args.scores)
-        report = evaluate_detector(dataset, scores, args.fprs)
+        report = evaluate_detector(dataset, scores, args.fprs, ai_fraction=args.ai_fraction)
     except (FileNotFoundError, ValueError) as e:
         raise SystemExit(f"error: {e}") from None
     report["detector"] = args.name

@@ -16,16 +16,30 @@ import pandas as pd
 
 from aiwd.data.build import LENGTH_BUCKETS, LONGEST_BUCKET
 from aiwd.eval.metrics import bootstrap_ci, conformal_threshold, fpr_upper_bound, roc_auc
+from aiwd.eval.subset import eval_subset
 
 
 def merge_scores(
-    dataset: pd.DataFrame, scores: pd.DataFrame, splits: Sequence[str]
+    dataset: pd.DataFrame,
+    scores: pd.DataFrame,
+    calibration_split: str = "calibration",
+    test_split: str = "test",
+    ai_fraction: float = 1.0,
 ) -> pd.DataFrame:
-    rows = dataset[dataset["split"].isin(splits)]
-    merged = rows.merge(scores, on="id", how="left", validate="one_to_one")
-    missing = int(merged["score"].isna().sum())
-    if missing:
-        raise ValueError(f"{missing} documents of splits {list(splits)} have no score")
+    """The documents of the evaluation subset (aiwd.eval.subset), with their scores.
+
+    Every one of them must be scored: a detector cannot silently skip texts.
+    Scores of other documents are ignored.
+    """
+    expected = eval_subset(dataset, ai_fraction, calibration_split, test_split)
+    merged = expected.merge(scores, on="id", how="left", validate="one_to_one")
+    missing = merged["score"].isna()
+    if missing.any():
+        n_human = int((missing & (merged["y"] == 0)).sum())
+        raise ValueError(
+            f"{int(missing.sum())} documents to evaluate have no score ({n_human} human, "
+            f"{int(missing.sum()) - n_human} AI; ai_fraction={ai_fraction:g})"
+        )
     return merged
 
 
@@ -61,8 +75,9 @@ def evaluate_detector(
     test_split: str = "test",
     n_boot: int = 500,
     seed: int = 0,
+    ai_fraction: float = 1.0,
 ) -> dict:
-    df = merge_scores(dataset, scores, [calibration_split, test_split])
+    df = merge_scores(dataset, scores, calibration_split, test_split, ai_fraction)
     calib_human = df[(df["split"] == calibration_split) & (df["y"] == 0)]["score"]
     if calib_human.empty:
         raise ValueError(f"no human texts in the {calibration_split!r} split")
@@ -89,6 +104,7 @@ def evaluate_detector(
             "calibration_split": calibration_split,
             "test_split": test_split,
             "n_calibration_human": int(calib_human.size),
+            "ai_fraction": ai_fraction,
             "thresholds": thresholds,
             "calibration_humans_above_threshold": allowed,
             "threshold_rule": "split conformal: k = floor(target * (n + 1)) - 1",
@@ -141,6 +157,15 @@ def to_markdown(report: dict, name: str) -> str:
         f"of the `{report['protocol']['calibration_split']}` split (split-conformal rule), "
         f"applied to `{report['protocol']['test_split']}` ({o['n_human']} human, {o['n_ai']} AI).",
         "",
+    ]
+    fraction = report["protocol"].get("ai_fraction", 1.0)
+    if fraction < 1.0:
+        lines += [
+            f"AI texts: a deterministic {100 * fraction:g}% sample of the test split "
+            "(proportions of domains and generators kept); all human texts are scored.",
+            "",
+        ]
+    lines += [
         f"AUROC: **{_fmt(o.get('auroc'), pct=False)}** "
         f"(95% CI {_fmt(o['auroc_ci95'][0], pct=False)}-{_fmt(o['auroc_ci95'][1], pct=False)})",
         "",

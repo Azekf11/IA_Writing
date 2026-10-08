@@ -80,7 +80,7 @@ def test_missing_scores_are_reported():
     df = dataset()
     scores = scores_for(df, 1.0).iloc[5:]
     with pytest.raises(ValueError, match="have no score"):
-        merge_scores(df, scores, ["calibration", "test"])
+        merge_scores(df, scores)
 
 
 def test_random_detector_is_near_chance_with_honest_fpr():

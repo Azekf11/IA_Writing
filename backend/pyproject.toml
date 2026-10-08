@@ -11,6 +11,14 @@ dependencies = [
     "pyarrow>=15",
 ]
 
+[project.optional-dependencies]
+# Zero-shot detectors (scripts/score_zeroshot.py): `uv sync --extra ml`
+ml = [
+    "torch>=2.4",
+    "transformers>=4.56",
+    "accelerate>=1.0",
+]
+
 [dependency-groups]
 dev = [
     "pytest>=8",
