@@ -17,6 +17,24 @@ from aiwd.eval.scores import load_scores
 BACKEND = Path(__file__).resolve().parents[1]
 
 
+ZEROSHOT_CRITERIA = ("binoculars", "fast-detectgpt", "loglik", "logrank")
+
+
+def _rescore_hint(message: str, scores: str) -> str:
+    """Point to rescore_zeroshot.py when a zero-shot run predates abstentions."""
+    stem = Path(scores).stem
+    criterion = next((c for c in ZEROSHOT_CRITERIA if stem.startswith(c + "-")), None)
+    if "have no score" not in message or criterion is None:
+        return ""
+    features = BACKEND / "data/features" / f"zeroshot-{stem.removeprefix(criterion + '-')}.parquet"
+    if not features.is_file():
+        return ""
+    return (
+        "\nThese zero-shot score files may come from a run that dropped unscoreable texts. "
+        f"Rebuild them with:\n  uv run python scripts/rescore_zeroshot.py {features}"
+    )
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--scores", required=True)
@@ -33,7 +51,7 @@ def main() -> None:
         dataset, scores = load_dataset(args.dataset), load_scores(args.scores)
         report = evaluate_detector(dataset, scores, args.fprs, ai_fraction=args.ai_fraction)
     except (FileNotFoundError, ValueError) as e:
-        raise SystemExit(f"error: {e}") from None
+        raise SystemExit(f"error: {e}{_rescore_hint(str(e), args.scores)}") from None
     report["detector"] = args.name
     report["dataset"] = str(args.dataset)
     out_dir = Path(args.out_dir)

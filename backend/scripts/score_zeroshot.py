@@ -15,18 +15,16 @@ Then evaluate with the same fraction:
 from __future__ import annotations
 
 import argparse
-import math
 from pathlib import Path
 
 import pandas as pd
 import torch
 
 from aiwd.data.build import load_dataset
-from aiwd.eval.scores import save_scores
 from aiwd.eval.subset import eval_subset
 from aiwd.normalize import normalize_text
-from aiwd.zeroshot.criteria import SCORE_SIGN
 from aiwd.zeroshot.lm_pair import MAX_TOKENS, PAIRS, load_pair, score_texts
+from aiwd.zeroshot.scorefiles import write_score_files
 
 BACKEND = Path(__file__).resolve().parents[1]
 DTYPES = {"float32": torch.float32, "float16": torch.float16, "bfloat16": torch.bfloat16}
@@ -82,19 +80,12 @@ def main() -> None:
     features.to_parquet(out_features, index=False)
     print(f"features -> {out_features}")
 
-    finite = features["binoculars"].map(math.isfinite)
-    if not finite.all():
-        print(f"WARNING: {int((~finite).sum())} texts have fewer than 2 tokens and get no "
-              f"score: {features.loc[~finite, 'id'].tolist()[:10]}")  # fmt: skip
-    features = features[finite]
-    for criterion, sign in SCORE_SIGN.items():
-        name = f"{criterion.replace('_', '-')}-{suffix}"
-        path = save_scores(
-            BACKEND / "data/scores" / f"{name}.parquet",
-            features["id"].tolist(),
-            (sign * features[criterion]).tolist(),
-        )
-        print(f"scores -> {path}")
+    paths, abstained = write_score_files(features, suffix, BACKEND / "data/scores")
+    for p in paths:
+        print(f"scores -> {p}")
+    if abstained:
+        print(f"{len(abstained)} texts could not be scored (fewer than 2 tokens or non-finite "
+              f"criteria); they count as not flagged: {abstained[:10]}")  # fmt: skip
 
 
 if __name__ == "__main__":

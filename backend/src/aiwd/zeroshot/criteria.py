@@ -15,6 +15,8 @@ import math
 
 import torch
 
+from aiwd.zeroshot.scorefiles import SCORE_SIGN  # noqa: F401  (re-exported)
+
 
 def text_criteria(
     observer_logits: torch.Tensor, performer_logits: torch.Tensor, input_ids: torch.Tensor
@@ -68,7 +70,3 @@ def text_criteria(
         "loglik": (-log_ppl).item(),
         "logrank": torch.log(rank.float()).mean().item(),
     }
-
-
-# Direction of each criterion as a score file ("higher = more likely AI").
-SCORE_SIGN = {"binoculars": -1.0, "fast_detectgpt": 1.0, "loglik": 1.0, "logrank": -1.0}

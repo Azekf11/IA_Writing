@@ -1,6 +1,8 @@
 """Score files: one row per document, columns `id` and `score` (higher = more likely AI).
 
 Every detector, local or run on a remote GPU, writes this format; run_eval reads it.
+A detector that cannot score a text abstains: the text gets ABSTAIN_SCORE, lower than any
+real score, so it is never flagged (an abstention counts as "not AI").
 """
 
 from __future__ import annotations
@@ -10,6 +12,8 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
+
+ABSTAIN_SCORE = -1e30
 
 
 def save_scores(path: str | Path, ids: Sequence[str], scores: Sequence[float]) -> Path:

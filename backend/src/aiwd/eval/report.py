@@ -16,6 +16,7 @@ import pandas as pd
 
 from aiwd.data.build import LENGTH_BUCKETS, LONGEST_BUCKET
 from aiwd.eval.metrics import bootstrap_ci, conformal_threshold, fpr_upper_bound, roc_auc
+from aiwd.eval.scores import ABSTAIN_SCORE
 from aiwd.eval.subset import eval_subset
 
 
@@ -78,6 +79,7 @@ def evaluate_detector(
     ai_fraction: float = 1.0,
 ) -> dict:
     df = merge_scores(dataset, scores, calibration_split, test_split, ai_fraction)
+    abstain = df["score"] <= ABSTAIN_SCORE
     calib_human = df[(df["split"] == calibration_split) & (df["y"] == 0)]["score"]
     if calib_human.empty:
         raise ValueError(f"no human texts in the {calibration_split!r} split")
@@ -105,6 +107,11 @@ def evaluate_detector(
             "test_split": test_split,
             "n_calibration_human": int(calib_human.size),
             "ai_fraction": ai_fraction,
+            "n_abstained": {
+                "calibration_human": int((abstain & (df["split"] == calibration_split)).sum()),
+                "test_human": int((abstain & (df["split"] == test_split) & (df["y"] == 0)).sum()),
+                "test_ai": int((abstain & (df["split"] == test_split) & (df["y"] == 1)).sum()),
+            },
             "thresholds": thresholds,
             "calibration_humans_above_threshold": allowed,
             "threshold_rule": "split conformal: k = floor(target * (n + 1)) - 1",
@@ -158,6 +165,20 @@ def to_markdown(report: dict, name: str) -> str:
         f"applied to `{report['protocol']['test_split']}` ({o['n_human']} human, {o['n_ai']} AI).",
         "",
     ]
+    abstained = report["protocol"].get("n_abstained", {})
+    if abstained.get("test_human") or abstained.get("test_ai"):
+        lines += [
+            f"Test split: the detector could not score {abstained['test_human']} human and "
+            f"{abstained['test_ai']} AI texts; they count as not flagged (and rank lowest "
+            "in the AUROC).",
+            "",
+        ]
+    if abstained.get("calibration_human"):
+        lines += [
+            f"Calibration split: {abstained['calibration_human']} human texts could not be "
+            "scored; they sit below every threshold.",
+            "",
+        ]
     fraction = report["protocol"].get("ai_fraction", 1.0)
     if fraction < 1.0:
         lines += [
