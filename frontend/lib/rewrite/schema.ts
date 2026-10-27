@@ -2,6 +2,7 @@ import { z } from "zod";
 import { MAX_CHARS } from "@/lib/text";
 
 export const RewriteRequestSchema = z.object({
+  locale: z.enum(["en", "fr"]).default("en"),
   text: z
     .string()
     .refine((text) => text.trim().length > 0)

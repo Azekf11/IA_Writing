@@ -15,6 +15,8 @@ export type RewriteResponse = { edits: Edit[] };
 // Stable codes: the UI maps each one to a translated message
 export type ErrorCode =
   | "invalid_request"
+  | "unauthorized"
+  | "quota_exceeded"
   | "not_configured"
   | "refused"
   | "busy"

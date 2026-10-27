@@ -5,6 +5,8 @@ export type ClientErrorCode = ErrorCode | "network";
 
 const KNOWN: ClientErrorCode[] = [
   "invalid_request",
+  "unauthorized",
+  "quota_exceeded",
   "not_configured",
   "refused",
   "busy",
@@ -19,13 +21,16 @@ export class RewriteRequestError extends Error {
   }
 }
 
-export async function fetchEdits(text: string): Promise<RewriteResponse> {
+export async function fetchEdits(
+  text: string,
+  locale: string,
+): Promise<RewriteResponse> {
   let response: Response;
   try {
     response = await fetch("/api/rewrite", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ text }),
+      body: JSON.stringify({ text, locale }),
     });
   } catch {
     throw new RewriteRequestError("network");

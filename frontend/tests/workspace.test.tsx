@@ -45,7 +45,9 @@ describe("RewriteWorkspace", () => {
     expect(await screen.findByText("Plainer word")).toBeInTheDocument();
     expect(fetchMock).toHaveBeenCalledWith(
       "/api/rewrite",
-      expect.objectContaining({ body: JSON.stringify({ text: TEXT }) }),
+      expect.objectContaining({
+        body: JSON.stringify({ text: TEXT, locale: "en" }),
+      }),
     );
     // Nothing is applied until the user accepts
     expect(screen.getByTestId("result")).toHaveTextContent(TEXT);

@@ -47,6 +47,34 @@
     "busy": "Le service est occupé. Réessayez dans un instant.",
     "upstream_error": "L'assistant n'a pas pu répondre. Réessayez.",
     "server_error": "Un problème est survenu de notre côté. Réessayez.",
-    "network": "Erreur réseau. Vérifiez votre connexion et réessayez."
+    "network": "Erreur réseau. Vérifiez votre connexion et réessayez.",
+    "unauthorized": "Connectez-vous pour réécrire votre texte.",
+    "quota_exceeded": "Vous avez atteint la limite du jour. Revenez demain."
+  },
+  "Nav": {
+    "home": "Réécrire",
+    "history": "Historique"
+  },
+  "Auth": {
+    "signIn": "Se connecter",
+    "emailLabel": "E-mail",
+    "emailPlaceholder": "vous@exemple.com",
+    "sendLink": "Envoyer le lien magique",
+    "sending": "Envoi...",
+    "checkEmail": "Vérifiez votre boîte mail : nous vous avons envoyé un lien de connexion.",
+    "signOut": "Se déconnecter",
+    "signedInAs": "Connecté : {email}",
+    "sendFailed": "Impossible d'envoyer le lien. Vérifiez l'adresse et réessayez.",
+    "callbackFailed": "Le lien de connexion est invalide ou expiré. Demandez-en un nouveau.",
+    "unavailable": "La connexion n'est pas configurée."
+  },
+  "History": {
+    "title": "Historique",
+    "empty": "Aucune réécriture pour le moment.",
+    "signInPrompt": "Connectez-vous pour voir votre historique.",
+    "edits": "{count, plural, one {# modification} other {# modifications}}",
+    "details": "Afficher le détail",
+    "delete": "Supprimer",
+    "unavailable": "L'historique n'est pas configuré."
   }
 }

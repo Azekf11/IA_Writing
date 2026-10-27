@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { DiffView } from "@/components/diff-view";
 import { TextEditor } from "@/components/text-editor";
 import { applyEdits, type Decision } from "@/lib/rewrite/apply";
@@ -14,6 +14,7 @@ type View = "editing" | "loading" | "reviewing";
 export function RewriteWorkspace() {
   const t = useTranslations("Review");
   const tErrors = useTranslations("Errors");
+  const locale = useLocale();
 
   const [text, setText] = useState("");
   const [view, setView] = useState<View>("editing");
@@ -26,7 +27,7 @@ export function RewriteWorkspace() {
     setView("loading");
     setErrorCode(null);
     try {
-      const result = await fetchEdits(text);
+      const result = await fetchEdits(text, locale);
       setEdits(result.edits);
       setDecisions({});
       setView("reviewing");

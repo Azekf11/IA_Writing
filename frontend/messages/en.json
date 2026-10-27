@@ -47,6 +47,34 @@
     "busy": "The service is busy. Please try again in a moment.",
     "upstream_error": "The assistant could not answer. Please try again.",
     "server_error": "Something went wrong on our side. Please try again.",
-    "network": "Network error. Check your connection and try again."
+    "network": "Network error. Check your connection and try again.",
+    "unauthorized": "Sign in to rewrite your text.",
+    "quota_exceeded": "You've reached today's limit. Come back tomorrow."
+  },
+  "Nav": {
+    "home": "Rewrite",
+    "history": "History"
+  },
+  "Auth": {
+    "signIn": "Sign in",
+    "emailLabel": "Email",
+    "emailPlaceholder": "you@example.com",
+    "sendLink": "Send magic link",
+    "sending": "Sending...",
+    "checkEmail": "Check your inbox: we sent you a sign-in link.",
+    "signOut": "Sign out",
+    "signedInAs": "Signed in as {email}",
+    "sendFailed": "Could not send the link. Check the address and try again.",
+    "callbackFailed": "The sign-in link is invalid or expired. Request a new one.",
+    "unavailable": "Sign-in is not configured."
+  },
+  "History": {
+    "title": "History",
+    "empty": "No rewrites yet.",
+    "signInPrompt": "Sign in to see your history.",
+    "edits": "{count, plural, one {# edit} other {# edits}}",
+    "details": "Show details",
+    "delete": "Delete",
+    "unavailable": "History is not configured."
   }
 }

@@ -1,9 +1,10 @@
 import { hasLocale, useTranslations } from "next-intl";
 import { setRequestLocale } from "next-intl/server";
 import { notFound } from "next/navigation";
-import { use } from "react";
-import { LanguageSwitcher } from "@/components/language-switcher";
+import { Suspense, use } from "react";
+import { AccountSection } from "@/components/account-section";
 import { RewriteWorkspace } from "@/components/rewrite-workspace";
+import { SiteHeader } from "@/components/site-header";
 import { routing } from "@/i18n/routing";
 
 export default function Home({ params }: PageProps<"/[locale]">) {
@@ -15,15 +16,11 @@ export default function Home({ params }: PageProps<"/[locale]">) {
 
   return (
     <main className="mx-auto flex w-full max-w-3xl flex-col gap-8 px-6 py-10">
-      <header className="flex items-start justify-between gap-4">
-        <div className="flex flex-col gap-1">
-          <h1 className="text-3xl font-semibold tracking-tight">
-            {t("title")}
-          </h1>
-          <p className="text-foreground/70">{t("tagline")}</p>
-        </div>
-        <LanguageSwitcher />
-      </header>
+      <SiteHeader />
+      <p className="text-foreground/70">{t("tagline")}</p>
+      <Suspense>
+        <AccountSection />
+      </Suspense>
       <RewriteWorkspace />
     </main>
   );
