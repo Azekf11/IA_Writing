@@ -4,8 +4,7 @@ export type Decision = "pending" | "accepted" | "rejected";
 
 // A slice of the original text, or an edit awaiting a decision
 export type Segment =
-  | { kind: "text"; text: string }
-  | { kind: "edit"; edit: Edit };
+  { kind: "text"; text: string } | { kind: "edit"; edit: Edit };
 
 // Cut the text around each edit. Edits must be sorted and non-overlapping.
 export function toSegments(text: string, edits: Edit[]): Segment[] {

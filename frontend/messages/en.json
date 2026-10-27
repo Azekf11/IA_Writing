@@ -22,5 +22,31 @@
   "NotFound": {
     "title": "Page not found",
     "back": "Back to home"
+  },
+  "Review": {
+    "title": "Suggested edits",
+    "noEdits": "Nothing to change: this text already reads naturally.",
+    "summary": "{accepted} of {total} accepted",
+    "accept": "Accept",
+    "reject": "Reject",
+    "undo": "Undo",
+    "acceptAll": "Accept all",
+    "rejectAll": "Reject all",
+    "result": "Result",
+    "copy": "Copy text",
+    "copied": "Copied",
+    "backToEditor": "Edit the text",
+    "removed": "Before",
+    "added": "After",
+    "emptyReplacement": "(removed)"
+  },
+  "Errors": {
+    "invalid_request": "This text can't be processed. Check its length and try again.",
+    "not_configured": "The rewrite service is not configured yet.",
+    "refused": "The assistant declined to rewrite this text.",
+    "busy": "The service is busy. Please try again in a moment.",
+    "upstream_error": "The assistant could not answer. Please try again.",
+    "server_error": "Something went wrong on our side. Please try again.",
+    "network": "Network error. Check your connection and try again."
   }
 }

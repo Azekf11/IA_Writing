@@ -22,5 +22,31 @@
   "NotFound": {
     "title": "Page introuvable",
     "back": "Retour à l'accueil"
+  },
+  "Review": {
+    "title": "Modifications suggérées",
+    "noEdits": "Rien à changer : ce texte paraît déjà naturel.",
+    "summary": "{accepted} acceptée(s) sur {total}",
+    "accept": "Accepter",
+    "reject": "Refuser",
+    "undo": "Annuler",
+    "acceptAll": "Tout accepter",
+    "rejectAll": "Tout refuser",
+    "result": "Résultat",
+    "copy": "Copier le texte",
+    "copied": "Copié",
+    "backToEditor": "Modifier le texte",
+    "removed": "Avant",
+    "added": "Après",
+    "emptyReplacement": "(supprimé)"
+  },
+  "Errors": {
+    "invalid_request": "Ce texte ne peut pas être traité. Vérifiez sa longueur et réessayez.",
+    "not_configured": "Le service de réécriture n'est pas encore configuré.",
+    "refused": "L'assistant a refusé de réécrire ce texte.",
+    "busy": "Le service est occupé. Réessayez dans un instant.",
+    "upstream_error": "L'assistant n'a pas pu répondre. Réessayez.",
+    "server_error": "Un problème est survenu de notre côté. Réessayez.",
+    "network": "Erreur réseau. Vérifiez votre connexion et réessayez."
   }
 }
