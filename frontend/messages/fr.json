@@ -76,5 +76,20 @@
     "details": "Afficher le détail",
     "delete": "Supprimer",
     "unavailable": "L'historique n'est pas configuré."
+  },
+  "Footer": {
+    "privacy": "Confidentialité",
+    "notice": "Les suggestions de l'IA peuvent être fausses. Relisez chaque modification avant de l'utiliser."
+  },
+  "Privacy": {
+    "title": "Confidentialité",
+    "intro": "Ce que ce site conserve et qui voit votre texte.",
+    "dataTitle": "Ce que nous conservons",
+    "data": "Votre adresse e-mail et, pour chaque réécriture, le texte original, les modifications suggérées et la date. Les autres utilisateurs ne peuvent pas les lire, et vous pouvez supprimer chaque entrée depuis la page d'historique.",
+    "aiTitle": "Traitement par IA",
+    "ai": "Votre texte est envoyé à Anthropic (Claude) pour produire les suggestions. N'envoyez pas de texte que vous n'avez pas le droit de partager.",
+    "limitsTitle": "Limites",
+    "limits": "Les suggestions sont des corrections de style. Elles ne changent pas l'auteur d'un texte, et cet outil ne détecte pas les textes écrits par une IA.",
+    "back": "Retour à l'accueil"
   }
 }

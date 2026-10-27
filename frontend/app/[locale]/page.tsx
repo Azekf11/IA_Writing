@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { Suspense, use } from "react";
 import { AccountSection } from "@/components/account-section";
 import { RewriteWorkspace } from "@/components/rewrite-workspace";
+import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
 import { routing } from "@/i18n/routing";
 
@@ -22,6 +23,7 @@ export default function Home({ params }: PageProps<"/[locale]">) {
         <AccountSection />
       </Suspense>
       <RewriteWorkspace />
+      <SiteFooter />
     </main>
   );
 }

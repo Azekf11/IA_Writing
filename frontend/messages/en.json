@@ -76,5 +76,20 @@
     "details": "Show details",
     "delete": "Delete",
     "unavailable": "History is not configured."
+  },
+  "Footer": {
+    "privacy": "Privacy",
+    "notice": "AI suggestions can be wrong. Review every edit before using it."
+  },
+  "Privacy": {
+    "title": "Privacy",
+    "intro": "What this site stores and who sees your text.",
+    "dataTitle": "What we store",
+    "data": "Your email address, and for each rewrite the original text, the suggested edits and the date. Other users cannot read them, and you can delete any entry from the history page.",
+    "aiTitle": "AI processing",
+    "ai": "Your text is sent to Anthropic (Claude) to produce the suggestions. Do not submit text you are not allowed to share.",
+    "limitsTitle": "Limits",
+    "limits": "Suggestions are style edits. They do not change who wrote a text, and this tool does not detect AI-written text.",
+    "back": "Back to home"
   }
 }

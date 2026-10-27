@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import { AuthPanel } from "@/components/auth-panel";
 import { HistoryList } from "@/components/history-list";
+import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
 import { routing } from "@/i18n/routing";
 import { createClient } from "@/lib/supabase/server";
@@ -56,6 +57,7 @@ export default async function HistoryPage({
       <Suspense>
         <HistoryContent />
       </Suspense>
+      <SiteFooter />
     </main>
   );
 }
