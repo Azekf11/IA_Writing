@@ -7,6 +7,15 @@
     "title": "IA Writing",
     "tagline": "Collez un texte, obtenez une réécriture plus naturelle."
   },
+  "Editor": {
+    "label": "Votre texte",
+    "placeholder": "Collez ou saisissez votre texte ici...",
+    "words": "{count, plural, one {# mot} other {# mots}}",
+    "characters": "{count} / {max} caractères",
+    "rewrite": "Réécrire",
+    "rewriting": "Réécriture...",
+    "tooLong": "Ce texte est trop long. La limite est de {max} caractères."
+  },
   "LanguageSwitcher": {
     "label": "Langue"
   },

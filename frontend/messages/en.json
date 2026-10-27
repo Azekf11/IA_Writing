@@ -7,6 +7,15 @@
     "title": "IA Writing",
     "tagline": "Paste a text, get a more natural rewrite."
   },
+  "Editor": {
+    "label": "Your text",
+    "placeholder": "Paste or type your text here...",
+    "words": "{count, plural, one {# word} other {# words}}",
+    "characters": "{count} / {max} characters",
+    "rewrite": "Rewrite",
+    "rewriting": "Rewriting...",
+    "tooLong": "This text is too long. The limit is {max} characters."
+  },
   "LanguageSwitcher": {
     "label": "Language"
   },
