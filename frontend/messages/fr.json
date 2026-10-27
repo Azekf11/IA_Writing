@@ -1,0 +1,17 @@
+{
+  "Metadata": {
+    "title": "IA Writing",
+    "description": "Réécrivez votre texte pour qu'il paraisse naturel."
+  },
+  "Home": {
+    "title": "IA Writing",
+    "tagline": "Collez un texte, obtenez une réécriture plus naturelle."
+  },
+  "LanguageSwitcher": {
+    "label": "Langue"
+  },
+  "NotFound": {
+    "title": "Page introuvable",
+    "back": "Retour à l'accueil"
+  }
+}
