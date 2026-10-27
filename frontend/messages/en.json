@@ -1,0 +1,95 @@
+{
+  "Metadata": {
+    "title": "IA Writing",
+    "description": "Rewrite your text so it reads naturally."
+  },
+  "Home": {
+    "title": "IA Writing",
+    "tagline": "Paste a text, get a more natural rewrite."
+  },
+  "Editor": {
+    "label": "Your text",
+    "placeholder": "Paste or type your text here...",
+    "words": "{count, plural, one {# word} other {# words}}",
+    "characters": "{count} / {max} characters",
+    "rewrite": "Rewrite",
+    "rewriting": "Rewriting...",
+    "tooLong": "This text is too long. The limit is {max} characters."
+  },
+  "LanguageSwitcher": {
+    "label": "Language"
+  },
+  "NotFound": {
+    "title": "Page not found",
+    "back": "Back to home"
+  },
+  "Review": {
+    "title": "Suggested edits",
+    "noEdits": "Nothing to change: this text already reads naturally.",
+    "summary": "{accepted} of {total} accepted",
+    "accept": "Accept",
+    "reject": "Reject",
+    "undo": "Undo",
+    "acceptAll": "Accept all",
+    "rejectAll": "Reject all",
+    "result": "Result",
+    "copy": "Copy text",
+    "copied": "Copied",
+    "backToEditor": "Edit the text",
+    "removed": "Before",
+    "added": "After",
+    "emptyReplacement": "(removed)"
+  },
+  "Errors": {
+    "invalid_request": "This text can't be processed. Check its length and try again.",
+    "not_configured": "The rewrite service is not configured yet.",
+    "refused": "The assistant declined to rewrite this text.",
+    "busy": "The service is busy. Please try again in a moment.",
+    "upstream_error": "The assistant could not answer. Please try again.",
+    "server_error": "Something went wrong on our side. Please try again.",
+    "network": "Network error. Check your connection and try again.",
+    "unauthorized": "Sign in to rewrite your text.",
+    "quota_exceeded": "You've reached today's limit. Come back tomorrow."
+  },
+  "Nav": {
+    "home": "Rewrite",
+    "history": "History"
+  },
+  "Auth": {
+    "signIn": "Sign in",
+    "emailLabel": "Email",
+    "emailPlaceholder": "you@example.com",
+    "sendLink": "Send magic link",
+    "sending": "Sending...",
+    "checkEmail": "Check your inbox: we sent you a sign-in link.",
+    "signOut": "Sign out",
+    "signedInAs": "Signed in as {email}",
+    "sendFailed": "Could not send the link. Check the address and try again.",
+    "callbackFailed": "The sign-in link is invalid or expired. Request a new one.",
+    "unavailable": "Sign-in is not configured."
+  },
+  "History": {
+    "title": "History",
+    "empty": "No rewrites yet.",
+    "signInPrompt": "Sign in to see your history.",
+    "edits": "{count, plural, one {# edit} other {# edits}}",
+    "details": "Show details",
+    "delete": "Delete",
+    "unavailable": "History is not configured."
+  },
+  "Footer": {
+    "privacy": "Privacy",
+    "notice": "AI suggestions can be wrong. Review every edit before using it."
+  },
+  "Privacy": {
+    "title": "Privacy",
+    "intro": "What this site stores and who sees your text.",
+    "dataTitle": "What we store",
+    "data": "Your email address, and for each rewrite the original text, the suggested edits and the date. Other users cannot read them, and you can delete any entry from the history page.",
+    "aiTitle": "AI processing",
+    "ai": "Your text is sent to Anthropic (Claude) to produce the suggestions. Do not submit text you are not allowed to share.",
+    "limitsTitle": "Limits",
+    "limits": "Suggestions are style edits. They do not change who wrote a text, and this tool does not detect AI-written text.",
+    "back": "Back to home"
+  }
+}
