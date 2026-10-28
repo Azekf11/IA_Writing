@@ -8,16 +8,17 @@ You review each edit, accept or reject it, then copy the result.
 - `backend/`: research code for AI-text detection (not used by the site yet)
 - `PLAN.md`: long-term plan, including the detector
 - `docs/DEPLOY.md`: Vercel and Supabase setup
+- `docs/STYLE_CORPUS.md`: the author corpus and vector search behind the rewrites
 
 ## How a rewrite works
 
 1. The user signs in with a magic link (Supabase Auth).
 2. `POST /api/rewrite` checks the session and takes one unit of the daily quota.
-3. Claude returns a list of `{original, replacement, reason}` edits, never a full rewrite.
+3. The server fetches 3 style excerpts (public-domain authors, pgvector) and Claude returns a list of `{original, replacement, reason}` edits, never a full rewrite.
 4. The server finds each quote in the text to compute offsets, and drops any it can't find.
 5. The edits are saved to the history and shown as a reviewable diff.
 
-The Claude key stays on the server. If the call fails, the quota is refunded.
+The Claude key stays on the server. If the call fails, the quota is refunded. If the style search fails, the rewrite runs without references.
 
 ## Local development
 
