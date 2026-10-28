@@ -1,0 +1,10 @@
+{
+  "model": "sentence-transformers/static-similarity-mrl-multilingual-v1",
+  "dim": 256,
+  "vocab": 105879,
+  "sha256": {
+    "weights.i8": "ea6daccc4c4fdf27eecfcd2716f5408142947622b5e3dcc356231ea8ddade15e",
+    "scales.f32": "2b42e8dedf1b2b5e45a5cac326ea17d3d9b1e07e12d571f6a09181d73d72c1ee",
+    "tokenizer.json": "11aaf894a4ccf3d95e8830e27c0f8152791fbbff2b988e29a265580b86edd216"
+  }
+}

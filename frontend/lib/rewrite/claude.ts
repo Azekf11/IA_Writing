@@ -1,6 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
-import { SYSTEM_PROMPT } from "./prompt";
+import type { Reference } from "@/lib/style/retrieve";
+import { buildUserMessage, SYSTEM_PROMPT } from "./prompt";
 import { ClaudeOutputSchema, type RawEdit } from "./schema";
 import type { ErrorCode } from "./types";
 
@@ -9,6 +10,10 @@ const DEFAULT_MODEL = "claude-sonnet-5-5";
 
 // Thinking tokens count against this limit too
 const MAX_TOKENS = 8000;
+
+// Stay under the route's 60 s limit. No retries: a retry could not finish in time,
+// and the user can simply press the button again (the quota is refunded on failure).
+const CALL_OPTIONS = { timeout: 50_000, maxRetries: 0 };
 
 export class RewriteError extends Error {
   constructor(
@@ -58,20 +63,26 @@ function toRewriteError(error: unknown): RewriteError {
 
 export async function requestEdits(
   text: string,
+  references: Reference[] = [],
   client: Pick<Anthropic, "messages"> = getClient(),
 ): Promise<RawEdit[]> {
   try {
-    const message = await client.messages.parse({
-      model: process.env.ANTHROPIC_MODEL || DEFAULT_MODEL,
-      max_tokens: MAX_TOKENS,
-      system: SYSTEM_PROMPT,
-      output_config: {
-        effort: "medium",
-        format: zodOutputFormat(ClaudeOutputSchema),
+    const message = await client.messages.parse(
+      {
+        model: process.env.ANTHROPIC_MODEL || DEFAULT_MODEL,
+        max_tokens: MAX_TOKENS,
+        system: SYSTEM_PROMPT,
+        output_config: {
+          effort: "medium",
+          format: zodOutputFormat(ClaudeOutputSchema),
+        },
+        // Tags mark the text as data; edits are re-checked against the original
+        messages: [
+          { role: "user", content: buildUserMessage(text, references) },
+        ],
       },
-      // Tags mark the text as data; edits are re-checked against the original
-      messages: [{ role: "user", content: `<text>\n${text}\n</text>` }],
-    });
+      CALL_OPTIONS,
+    );
 
     if (message.stop_reason === "refusal") {
       throw new RewriteError("refused", 422);

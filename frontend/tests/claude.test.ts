@@ -29,12 +29,14 @@ describe("requestEdits", () => {
   it("returns the parsed edits", async () => {
     const edits = [{ original: "a", replacement: "b", reason: "c" }];
     const parse = vi.fn().mockResolvedValue(ok(edits));
-    await expect(requestEdits("a", fakeClient(parse))).resolves.toEqual(edits);
+    await expect(requestEdits("a", [], fakeClient(parse))).resolves.toEqual(
+      edits,
+    );
   });
 
   it("wraps the text in tags and asks for structured output", async () => {
     const parse = vi.fn().mockResolvedValue(ok([]));
-    await requestEdits("hello", fakeClient(parse));
+    await requestEdits("hello", [], fakeClient(parse));
     const params = parse.mock.calls[0][0];
     expect(params.messages[0].content).toBe("<text>\nhello\n</text>");
     expect(params.output_config.format).toBeDefined();
@@ -42,14 +44,16 @@ describe("requestEdits", () => {
 
   it("maps a refusal to the refused code", async () => {
     const parse = vi.fn().mockResolvedValue({ stop_reason: "refusal" });
-    expect(await codeOf(requestEdits("a", fakeClient(parse)))).toBe("refused");
+    expect(await codeOf(requestEdits("a", [], fakeClient(parse)))).toBe(
+      "refused",
+    );
   });
 
   it("treats unparsable output as an upstream error", async () => {
     const parse = vi
       .fn()
       .mockResolvedValue({ stop_reason: "max_tokens", parsed_output: null });
-    const code = await codeOf(requestEdits("a", fakeClient(parse)));
+    const code = await codeOf(requestEdits("a", [], fakeClient(parse)));
     expect(code).toBe("upstream_error");
   });
 
@@ -57,7 +61,9 @@ describe("requestEdits", () => {
     for (const status of [429, 529]) {
       const error = apiError(status);
       const parse = vi.fn().mockRejectedValue(error);
-      expect(await codeOf(requestEdits("a", fakeClient(parse)))).toBe("busy");
+      expect(await codeOf(requestEdits("a", [], fakeClient(parse)))).toBe(
+        "busy",
+      );
     }
   });
 
@@ -65,7 +71,7 @@ describe("requestEdits", () => {
     vi.spyOn(console, "error").mockImplementation(() => {});
     const error = apiError(401);
     const parse = vi.fn().mockRejectedValue(error);
-    const code = await codeOf(requestEdits("a", fakeClient(parse)));
+    const code = await codeOf(requestEdits("a", [], fakeClient(parse)));
     expect(code).toBe("server_error");
   });
 
@@ -73,7 +79,7 @@ describe("requestEdits", () => {
     vi.spyOn(console, "error").mockImplementation(() => {});
     const error = apiError(400);
     const parse = vi.fn().mockRejectedValue(error);
-    const code = await codeOf(requestEdits("a", fakeClient(parse)));
+    const code = await codeOf(requestEdits("a", [], fakeClient(parse)));
     expect(code).toBe("upstream_error");
   });
 });

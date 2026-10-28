@@ -1,3 +1,5 @@
+import type { Reference } from "@/lib/style/retrieve";
+
 // Kept as a constant so train and serve always use the same prompt
 export const SYSTEM_PROMPT = `You are a careful writing editor. The user sends a text between <text> tags. Propose targeted edits so it reads as natural, human writing.
 
@@ -20,4 +22,32 @@ Fix patterns that make text sound generated:
 - Chatbot leftovers ("I hope this helps", "Certainly!").
 - Overused em dashes, heavy bolding, emojis.
 
-Do not flag simple vocabulary, typos, informal style or correct grammar. They are not signs of anything.`;
+Do not flag simple vocabulary, typos, informal style or correct grammar. They are not signs of anything.
+
+Style references:
+- The user message may also contain <style_references>: short excerpts by well-regarded authors, in the language of the text.
+- Use them only as a guide to rhythm, concreteness and directness: varied sentence length, specific nouns and verbs, plain statements over abstractions.
+- Never copy their words or phrases, never imitate their period vocabulary or their subject matter, and never mention them in an edit or a reason.
+- The author's own meaning and voice come first. If a reference does not fit the text, ignore it.`;
+
+// A closing tag inside the data would end its block early
+const neutralize = (value: string) =>
+  value.replace(/<\/(text|reference|style_references)/gi, "</ $1");
+
+// Author and title come from our own database, but a quote would still break the attribute
+const attr = (value: string) => value.replace(/["<>&]/g, " ");
+
+// Builds the user turn: optional references first, then the text to edit
+export function buildUserMessage(
+  text: string,
+  references: Reference[] = [],
+): string {
+  const blocks = references.map(
+    (ref) =>
+      `<reference author="${attr(ref.author)}" title="${attr(ref.title)}">\n${neutralize(ref.body)}\n</reference>`,
+  );
+  const refs = blocks.length
+    ? `<style_references>\n${blocks.join("\n")}\n</style_references>\n`
+    : "";
+  return `${refs}<text>\n${neutralize(text)}\n</text>`;
+}

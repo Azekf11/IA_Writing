@@ -15,6 +15,10 @@ const securityHeaders = [
 ];
 
 const nextConfig: NextConfig = {
+  // The route reads the embedding files at runtime, which the file tracer cannot see
+  outputFileTracingIncludes: {
+    "/api/rewrite": ["./data/embedder/**"],
+  },
   async headers() {
     return [{ source: "/(.*)", headers: securityHeaders }];
   },

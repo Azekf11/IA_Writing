@@ -10,6 +10,10 @@ vi.mock("@/lib/rewrite/claude", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/rewrite/claude")>()),
   requestEdits: (...args: unknown[]) => requestEdits(...args),
 }));
+const findReferences = vi.fn();
+vi.mock("@/lib/style/retrieve", () => ({
+  findReferences: (...args: unknown[]) => findReferences(...args),
+}));
 vi.mock("@/lib/supabase/server", () => ({
   createClient: () => createClient(),
 }));
@@ -55,6 +59,7 @@ beforeEach(() => {
   vi.stubEnv("ANTHROPIC_API_KEY", "test-key");
   requestEdits.mockReset();
   createClient.mockReset();
+  findReferences.mockReset().mockResolvedValue([]);
   vi.spyOn(console, "error").mockImplementation(() => {});
 });
 
@@ -157,6 +162,44 @@ describe("POST /api/rewrite", () => {
         locale: "fr",
       }),
     );
+  });
+
+  it("passes the style references to Claude and credits them in the response", async () => {
+    const { client } = fakeSupabase();
+    createClient.mockResolvedValue(client);
+    const refs = [
+      {
+        id: "1",
+        author: "Jane Austen",
+        title: "Emma",
+        kind: "fiction",
+        body: "b",
+        similarity: 0.4,
+      },
+    ];
+    findReferences.mockResolvedValue(refs);
+    requestEdits.mockResolvedValue([EDIT]);
+
+    const response = await call({ text: "Hello world" });
+    expect(requestEdits).toHaveBeenCalledWith("Hello world", refs);
+    const body = await response.json();
+    expect(body.references).toEqual([{ author: "Jane Austen", title: "Emma" }]);
+    // The excerpt itself stays on the server
+    expect(JSON.stringify(body)).not.toContain('"body"');
+  });
+
+  it("rewrites without references when none are found", async () => {
+    const { client } = fakeSupabase();
+    createClient.mockResolvedValue(client);
+    requestEdits.mockResolvedValue([EDIT]);
+    const response = await call({ text: "Hello world" });
+    expect((await response.json()).references).toEqual([]);
+  });
+
+  it("rejects an oversized body before parsing it", async () => {
+    const response = await call("x".repeat(41_000));
+    expect(response.status).toBe(413);
+    expect(requestEdits).not.toHaveBeenCalled();
   });
 
   it("still returns the result when saving the history fails", async () => {

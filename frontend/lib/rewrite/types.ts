@@ -10,7 +10,10 @@ export type Edit = {
   end: number;
 };
 
-export type RewriteResponse = { edits: Edit[] };
+// Authors whose excerpts guided the rewrite, shown to the user for transparency
+export type ReferenceCredit = { author: string; title: string };
+
+export type RewriteResponse = { edits: Edit[]; references: ReferenceCredit[] };
 
 // Stable codes: the UI maps each one to a translated message
 export type ErrorCode =

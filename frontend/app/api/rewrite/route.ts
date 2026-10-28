@@ -7,17 +7,29 @@ import type {
   ErrorResponse,
   RewriteResponse,
 } from "@/lib/rewrite/types";
+import { findReferences } from "@/lib/style/retrieve";
 import { createClient } from "@/lib/supabase/server";
 
 // Claude can take a while on long texts
 export const maxDuration = 60;
+
+// 5000 characters of JSON-escaped text stay far below this; bigger bodies are abuse
+const MAX_BODY_BYTES = 40_000;
 
 function fail(code: ErrorCode, status: number) {
   return Response.json({ error: code } satisfies ErrorResponse, { status });
 }
 
 export async function POST(request: Request) {
-  const body = await request.json().catch(() => null);
+  // Read as text first so the size check happens before any parsing
+  const raw = await request.text().catch(() => "");
+  if (raw.length > MAX_BODY_BYTES) return fail("invalid_request", 413);
+  let body: unknown = null;
+  try {
+    body = JSON.parse(raw);
+  } catch {
+    // Falls through to the schema check below
+  }
   const parsed = RewriteRequestSchema.safeParse(body);
   if (!parsed.success) return fail("invalid_request", 400);
 
@@ -44,8 +56,9 @@ export async function POST(request: Request) {
 
   const { text, locale } = parsed.data;
   try {
-    const raw = await requestEdits(text);
-    const edits = locateEdits(text, raw);
+    const references = await findReferences(supabase, text, locale);
+    const rawEdits = await requestEdits(text, references);
+    const edits = locateEdits(text, rawEdits);
 
     // History is a bonus: a failed save must not lose the result
     const { error: saveError } = await supabase.from("rewrites").insert({
@@ -57,7 +70,11 @@ export async function POST(request: Request) {
     });
     if (saveError) console.error("History save failed", saveError.code);
 
-    return Response.json({ edits } satisfies RewriteResponse);
+    const credits = references.map(({ author, title }) => ({ author, title }));
+    return Response.json({
+      edits,
+      references: credits,
+    } satisfies RewriteResponse);
   } catch (error) {
     // The user got nothing, so give the request back
     await supabase.rpc("refund_quota");
