@@ -62,3 +62,10 @@ insert into public.rewrites (user_id, original, locale) values ('22222222-2222-2
 delete from auth.users where email in ('a@test.dev','b@test.dev');
 \echo '== cascade: rewrites + usage empty (expect 0, 0)'
 select (select count(*) from public.rewrites) as rewrites, (select count(*) from public.usage) as usage;
+
+-- Hosted projects grant broad table privileges by default; the migration
+-- 20261028000000_tighten_grants.sql narrows them. Expect only the rows below.
+select grantee, table_name, string_agg(privilege_type, ',' order by privilege_type) as privileges
+from information_schema.role_table_grants
+where table_schema = 'public' and grantee in ('anon', 'authenticated')
+group by 1, 2 order by 2, 1;

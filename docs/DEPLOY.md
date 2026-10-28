@@ -16,6 +16,8 @@ Do these once, in this order. Keys go in dashboards, never in git.
    supabase link --project-ref <your-project-ref>
    supabase db push
    ```
+
+   Do not run `supabase config push`: `supabase/config.toml` holds local-only settings (localhost URLs, no email confirmation) and would overwrite your hosted Auth config. Change hosted settings in the dashboard instead.
 3. Dashboard > Authentication > URL Configuration:
    - **Site URL**: your production URL, for example `https://ia-writing.vercel.app`.
    - **Redirect URLs**: add `https://ia-writing.vercel.app/**` and `http://localhost:3000/**`. For Vercel preview deployments, add `https://*-<your-team>.vercel.app/**`.
