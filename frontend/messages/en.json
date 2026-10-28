@@ -5,7 +5,22 @@
   },
   "Home": {
     "title": "IA Writing",
-    "tagline": "Paste a text, get a more natural rewrite."
+    "tagline": "Paste a text and get targeted edits that remove stock phrases and filler, guided by prose from great authors.",
+    "headline": "Write like a person, not a template.",
+    "steps": {
+      "one": {
+        "title": "Paste",
+        "body": "Any text up to 5,000 characters, in English or French."
+      },
+      "two": {
+        "title": "Review",
+        "body": "Each suggestion shows what changes and why."
+      },
+      "three": {
+        "title": "Decide",
+        "body": "Accept or reject every edit, then copy the result."
+      }
+    }
   },
   "Editor": {
     "label": "Your text",
@@ -38,7 +53,9 @@
     "backToEditor": "Edit the text",
     "removed": "Before",
     "added": "After",
-    "emptyReplacement": "(removed)"
+    "emptyReplacement": "(removed)",
+    "inspiredBy": "Style references: {authors}",
+    "sourcesTitle": "Guided by"
   },
   "Errors": {
     "invalid_request": "This text can't be processed. Check its length and try again.",
@@ -91,5 +108,20 @@
     "limitsTitle": "Limits",
     "limits": "Suggestions are style edits. They do not change who wrote a text, and this tool does not detect AI-written text.",
     "back": "Back to home"
+  },
+  "Theme": {
+    "label": "Appearance",
+    "mode": "Mode",
+    "accent": "Accent colour",
+    "light": "Day",
+    "dark": "Night",
+    "system": "Auto",
+    "accents": {
+      "blue": "Blue",
+      "violet": "Violet",
+      "emerald": "Emerald",
+      "amber": "Amber",
+      "rose": "Rose"
+    }
   }
 }

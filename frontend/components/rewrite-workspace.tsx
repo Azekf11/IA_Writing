@@ -1,15 +1,21 @@
 "use client";
 
-import { useState } from "react";
+import { motion } from "motion/react";
+import { ArrowLeft, BookOpen, Check, Copy, Sparkles } from "lucide-react";
 import { useLocale, useTranslations } from "next-intl";
+import { useState } from "react";
 import { DiffView } from "@/components/diff-view";
 import { TextEditor } from "@/components/text-editor";
+import { cn } from "@/lib/cn";
 import { applyEdits, type Decision } from "@/lib/rewrite/apply";
 import { fetchEdits, RewriteRequestError } from "@/lib/rewrite/client";
 import type { ClientErrorCode } from "@/lib/rewrite/client";
-import type { Edit } from "@/lib/rewrite/types";
+import type { Edit, ReferenceCredit } from "@/lib/rewrite/types";
 
 type View = "editing" | "loading" | "reviewing";
+
+const button =
+  "inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-semibold transition-all active:scale-95";
 
 export function RewriteWorkspace() {
   const t = useTranslations("Review");
@@ -19,6 +25,7 @@ export function RewriteWorkspace() {
   const [text, setText] = useState("");
   const [view, setView] = useState<View>("editing");
   const [edits, setEdits] = useState<Edit[]>([]);
+  const [credits, setCredits] = useState<ReferenceCredit[]>([]);
   const [decisions, setDecisions] = useState<Record<string, Decision>>({});
   const [errorCode, setErrorCode] = useState<ClientErrorCode | null>(null);
   const [copied, setCopied] = useState(false);
@@ -29,6 +36,7 @@ export function RewriteWorkspace() {
     try {
       const result = await fetchEdits(text, locale);
       setEdits(result.edits);
+      setCredits(result.references ?? []);
       setDecisions({});
       setView("reviewing");
     } catch (error) {
@@ -67,42 +75,77 @@ export function RewriteWorkspace() {
 
   const result = applyEdits(text, edits, decisions);
   const accepted = edits.filter((e) => decisions[e.id] === "accepted").length;
+  const authors = [...new Set(credits.map((c) => c.author))].join(", ");
 
   return (
-    <section className="flex flex-col gap-6">
+    <motion.section
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.25 }}
+      className="flex flex-col gap-6"
+    >
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h2 className="text-xl font-semibold">{t("title")}</h2>
+        <h2 className="flex items-center gap-2 text-xl font-semibold">
+          <Sparkles className="size-5 text-accent" aria-hidden />
+          {t("title")}
+        </h2>
         <button
           type="button"
           onClick={() => setView("editing")}
-          className="text-sm underline"
+          className={cn(button, "border border-border hover:bg-surface-2")}
         >
+          <ArrowLeft className="size-4" aria-hidden />
           {t("backToEditor")}
         </button>
       </div>
 
+      {authors && (
+        <p className="flex items-center gap-2 text-xs text-muted">
+          <BookOpen className="size-3.5 shrink-0" aria-hidden />
+          {t("inspiredBy", { authors })}
+        </p>
+      )}
+
       {edits.length === 0 ? (
-        <p className="rounded-lg border border-foreground/15 p-4">
+        <p className="rounded-2xl border border-border bg-surface p-5 shadow-card">
           {t("noEdits")}
         </p>
       ) : (
         <>
-          <div className="flex flex-wrap items-center justify-between gap-3 text-sm">
-            <p className="text-foreground/60" aria-live="polite">
-              {t("summary", { accepted, total: edits.length })}
-            </p>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-3" aria-live="polite">
+              <p className="text-sm text-muted">
+                {t("summary", { accepted, total: edits.length })}
+              </p>
+              <div
+                className="h-1.5 w-24 overflow-hidden rounded-full bg-surface-2"
+                aria-hidden
+              >
+                <div
+                  className="h-full rounded-full bg-accent transition-[width] duration-300"
+                  style={{ width: `${(accepted / edits.length) * 100}%` }}
+                />
+              </div>
+            </div>
             <div className="flex gap-2">
               <button
                 type="button"
                 onClick={() => decideAll("accepted")}
-                className="rounded-md bg-foreground px-3 py-1 font-medium text-background"
+                className={cn(
+                  button,
+                  "bg-accent text-accent-foreground hover:brightness-110",
+                )}
               >
+                <Check className="size-4" aria-hidden />
                 {t("acceptAll")}
               </button>
               <button
                 type="button"
                 onClick={() => decideAll("rejected")}
-                className="rounded-md border border-foreground/30 px-3 py-1 font-medium"
+                className={cn(
+                  button,
+                  "border border-border hover:bg-surface-2",
+                )}
               >
                 {t("rejectAll")}
               </button>
@@ -118,26 +161,34 @@ export function RewriteWorkspace() {
             }
           />
 
-          <div className="flex flex-col gap-2">
+          <div className="flex flex-col gap-3 rounded-2xl border border-border bg-surface p-5 shadow-card">
             <div className="flex items-center justify-between">
-              <h3 className="text-sm font-medium">{t("result")}</h3>
+              <h3 className="text-sm font-semibold">{t("result")}</h3>
               <button
                 type="button"
                 onClick={() => copy(result)}
-                className="rounded-md border border-foreground/30 px-3 py-1 text-sm font-medium"
+                className={cn(
+                  button,
+                  "border border-border hover:bg-surface-2",
+                )}
               >
+                {copied ? (
+                  <Check className="size-4 text-add" aria-hidden />
+                ) : (
+                  <Copy className="size-4" aria-hidden />
+                )}
                 {copied ? t("copied") : t("copy")}
               </button>
             </div>
             <p
               data-testid="result"
-              className="whitespace-pre-wrap rounded-lg bg-foreground/5 p-3 leading-relaxed"
+              className="whitespace-pre-wrap leading-relaxed"
             >
               {result}
             </p>
           </div>
         </>
       )}
-    </section>
+    </motion.section>
   );
 }

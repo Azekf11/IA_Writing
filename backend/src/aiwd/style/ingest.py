@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import json
+import ssl
 import urllib.error
 import urllib.request
 from collections.abc import Iterable, Iterator
 from pathlib import Path
 
+import certifi
 import numpy as np
 
 from aiwd.style.embed import Embedder
@@ -68,8 +70,10 @@ def upsert(base_url: str, secret_key: str, batch: list[dict]) -> None:
             "Prefer": "resolution=merge-duplicates,return=minimal",
         },
     )
+    # Some Python installs ship without root certificates, so use certifi's bundle
+    context = ssl.create_default_context(cafile=certifi.where())
     try:
-        urllib.request.urlopen(request, timeout=120).read()
+        urllib.request.urlopen(request, timeout=120, context=context).read()
     except urllib.error.HTTPError as error:
         # The body says which column or constraint failed
         raise RuntimeError(f"upsert failed: {error.code} {error.read().decode()[:300]}") from error

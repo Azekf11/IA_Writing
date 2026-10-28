@@ -1,28 +1,36 @@
+import { PenLine } from "lucide-react";
 import { getTranslations } from "next-intl/server";
 import { LanguageSwitcher } from "@/components/language-switcher";
+import { NavLink } from "@/components/nav-link";
+import { ThemeControls } from "@/components/theme-controls";
 import { Link } from "@/i18n/navigation";
 
-// Shared top bar: title, navigation and language switch
+// Shared top bar: brand, navigation, language and appearance
 export async function SiteHeader() {
   const t = await getTranslations("Nav");
   const tHome = await getTranslations("Home");
 
   return (
-    <header className="flex flex-wrap items-center justify-between gap-4">
-      <div className="flex items-center gap-6">
-        <Link href="/" className="text-xl font-semibold tracking-tight">
+    <header className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3">
+      <div className="flex items-center gap-5">
+        <Link
+          href="/"
+          className="flex items-center gap-2 text-lg font-semibold tracking-tight"
+        >
+          <span className="grid size-8 place-items-center rounded-lg bg-accent text-accent-foreground">
+            <PenLine className="size-4" aria-hidden />
+          </span>
           {tHome("title")}
         </Link>
-        <nav className="flex gap-4 text-sm">
-          <Link href="/" className="hover:underline">
-            {t("home")}
-          </Link>
-          <Link href="/history" className="hover:underline">
-            {t("history")}
-          </Link>
+        <nav className="flex gap-1">
+          <NavLink href="/">{t("home")}</NavLink>
+          <NavLink href="/history">{t("history")}</NavLink>
         </nav>
       </div>
-      <LanguageSwitcher />
+      <div className="flex items-center gap-2">
+        <LanguageSwitcher />
+        <ThemeControls />
+      </div>
     </header>
   );
 }

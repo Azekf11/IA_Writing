@@ -1,6 +1,8 @@
 "use client";
 
+import { Check, RotateCcw, X } from "lucide-react";
 import { useTranslations } from "next-intl";
+import { cn } from "@/lib/cn";
 import { toSegments, type Decision } from "@/lib/rewrite/apply";
 import type { Edit } from "@/lib/rewrite/types";
 
@@ -19,7 +21,11 @@ export function DiffView({ text, edits, decisions, onDecide }: Props) {
     <div className="whitespace-pre-wrap leading-relaxed">
       {toSegments(text, edits).map((segment, index) => {
         if (segment.kind === "text") {
-          return <span key={index}>{segment.text}</span>;
+          return (
+            <span key={index} className="text-muted">
+              {segment.text}
+            </span>
+          );
         }
 
         const { edit } = segment;
@@ -31,52 +37,54 @@ export function DiffView({ text, edits, decisions, onDecide }: Props) {
           <span
             key={edit.id}
             data-decision={decision}
-            className="my-1 block rounded-lg border border-foreground/15 p-3"
+            className={cn(
+              "my-2 block rounded-xl border bg-surface p-4 transition-colors",
+              accepted && "border-add/50",
+              rejected && "border-border opacity-70",
+              decision === "pending" && "border-border shadow-card",
+            )}
           >
             <span className="block text-sm">
               <span className="sr-only">{t("removed")}: </span>
               <span
-                className={
-                  accepted
-                    ? "bg-red-500/15 text-red-600 line-through dark:text-red-400"
-                    : rejected
-                      ? undefined
-                      : "bg-red-500/10"
-                }
+                className={cn(
+                  "rounded bg-remove-soft px-1 py-0.5 text-remove",
+                  accepted && "line-through",
+                  rejected && "bg-transparent text-foreground",
+                )}
               >
                 {edit.original}
               </span>
             </span>
-            <span className="mt-1 block text-sm">
+            <span className="mt-2 block text-sm">
               <span className="sr-only">{t("added")}: </span>
               <span
-                className={
-                  rejected
-                    ? "text-foreground/40 line-through"
-                    : "bg-green-500/15 text-green-700 dark:text-green-400"
-                }
+                className={cn(
+                  "rounded bg-add-soft px-1 py-0.5 text-add",
+                  rejected && "bg-transparent text-muted line-through",
+                )}
               >
                 {edit.replacement || t("emptyReplacement")}
               </span>
             </span>
-            <span className="mt-1 block text-xs text-foreground/60">
-              {edit.reason}
-            </span>
-            <span className="mt-2 flex gap-2">
+            <span className="mt-2 block text-xs text-muted">{edit.reason}</span>
+            <span className="mt-3 flex gap-2">
               {decision === "pending" ? (
                 <>
                   <button
                     type="button"
                     onClick={() => onDecide(edit.id, "accepted")}
-                    className="rounded-md bg-foreground px-3 py-1 text-xs font-medium text-background"
+                    className="inline-flex items-center gap-1.5 rounded-lg bg-accent px-3 py-1.5 text-xs font-semibold text-accent-foreground transition-all hover:brightness-110 active:scale-95"
                   >
+                    <Check className="size-3.5" aria-hidden />
                     {t("accept")}
                   </button>
                   <button
                     type="button"
                     onClick={() => onDecide(edit.id, "rejected")}
-                    className="rounded-md border border-foreground/30 px-3 py-1 text-xs font-medium"
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-xs font-semibold transition-colors hover:bg-surface-2"
                   >
+                    <X className="size-3.5" aria-hidden />
                     {t("reject")}
                   </button>
                 </>
@@ -84,8 +92,9 @@ export function DiffView({ text, edits, decisions, onDecide }: Props) {
                 <button
                   type="button"
                   onClick={() => onDecide(edit.id, "pending")}
-                  className="rounded-md border border-foreground/30 px-3 py-1 text-xs font-medium"
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-xs font-semibold transition-colors hover:bg-surface-2"
                 >
+                  <RotateCcw className="size-3.5" aria-hidden />
                   {t("undo")}
                 </button>
               )}

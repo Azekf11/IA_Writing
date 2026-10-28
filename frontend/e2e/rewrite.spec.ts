@@ -85,3 +85,39 @@ test.describe("rewrite", () => {
     await expect(page.getByRole("button", { name: "Rewrite" })).toBeDisabled();
   });
 });
+
+test.describe("appearance", () => {
+  test("follows the system theme, then lets the user pick night mode", async ({
+    browser,
+  }) => {
+    const context = await browser.newContext({ colorScheme: "light" });
+    const page = await context.newPage();
+    await page.goto("/en");
+    await expect(page.locator("html")).not.toHaveClass(/dark/);
+
+    await page.getByRole("button", { name: "Appearance" }).click();
+    await page.getByRole("radio", { name: "Night" }).click();
+    await expect(page.locator("html")).toHaveClass(/dark/);
+
+    // The choice survives a reload, without a flash of the other theme
+    await page.reload();
+    await expect(page.locator("html")).toHaveClass(/dark/);
+    await context.close();
+  });
+
+  test("remembers the accent colour", async ({ page }) => {
+    await page.goto("/en");
+    await page.getByRole("button", { name: "Appearance" }).click();
+    await page.getByRole("radio", { name: "Violet" }).click();
+    await expect(page.locator("html")).toHaveAttribute("data-accent", "violet");
+
+    await page.reload();
+    await expect(page.locator("html")).toHaveAttribute("data-accent", "violet");
+  });
+
+  test("theme controls are translated", async ({ page }) => {
+    await page.goto("/fr");
+    await page.getByRole("button", { name: "Apparence" }).click();
+    await expect(page.getByRole("radio", { name: "Nuit" })).toBeVisible();
+  });
+});

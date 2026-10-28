@@ -25,14 +25,17 @@ export function HistoryList({ items }: { items: HistoryItem[] }) {
   }
 
   if (rows.length === 0) {
-    return <p className="text-foreground/60">{t("empty")}</p>;
+    return <p className="text-muted">{t("empty")}</p>;
   }
 
   return (
     <ul className="flex flex-col gap-3">
       {rows.map((row) => (
-        <li key={row.id} className="rounded-lg border border-foreground/15 p-4">
-          <div className="flex items-center justify-between gap-3 text-xs text-foreground/60">
+        <li
+          key={row.id}
+          className="rounded-xl border border-border bg-surface p-4 shadow-card"
+        >
+          <div className="flex items-center justify-between gap-3 text-xs text-muted">
             <span>
               {format.dateTime(new Date(row.createdAt), {
                 dateStyle: "medium",

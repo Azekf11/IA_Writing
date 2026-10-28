@@ -5,9 +5,12 @@ export async function SiteFooter() {
   const t = await getTranslations("Footer");
 
   return (
-    <footer className="flex flex-wrap items-center justify-between gap-2 border-t border-foreground/10 pt-4 text-xs text-foreground/60">
+    <footer className="flex flex-wrap items-center justify-between gap-2 border-t border-border pt-5 text-xs text-muted">
       <p>{t("notice")}</p>
-      <Link href="/privacy" className="underline">
+      <Link
+        href="/privacy"
+        className="underline-offset-4 hover:text-foreground hover:underline"
+      >
         {t("privacy")}
       </Link>
     </footer>

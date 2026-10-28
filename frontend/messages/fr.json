@@ -5,7 +5,22 @@
   },
   "Home": {
     "title": "IA Writing",
-    "tagline": "Collez un texte, obtenez une réécriture plus naturelle."
+    "tagline": "Collez un texte et obtenez des corrections ciblées qui retirent les formules toutes faites, guidées par la prose de grands auteurs.",
+    "headline": "Écrivez comme une personne, pas comme un modèle.",
+    "steps": {
+      "one": {
+        "title": "Collez",
+        "body": "Un texte jusqu'à 5 000 caractères, en anglais ou en français."
+      },
+      "two": {
+        "title": "Relisez",
+        "body": "Chaque suggestion montre ce qui change et pourquoi."
+      },
+      "three": {
+        "title": "Choisissez",
+        "body": "Acceptez ou refusez chaque modification, puis copiez le résultat."
+      }
+    }
   },
   "Editor": {
     "label": "Votre texte",
@@ -38,7 +53,9 @@
     "backToEditor": "Modifier le texte",
     "removed": "Avant",
     "added": "Après",
-    "emptyReplacement": "(supprimé)"
+    "emptyReplacement": "(supprimé)",
+    "inspiredBy": "Références de style : {authors}",
+    "sourcesTitle": "Guidé par"
   },
   "Errors": {
     "invalid_request": "Ce texte ne peut pas être traité. Vérifiez sa longueur et réessayez.",
@@ -91,5 +108,20 @@
     "limitsTitle": "Limites",
     "limits": "Les suggestions sont des corrections de style. Elles ne changent pas l'auteur d'un texte, et cet outil ne détecte pas les textes écrits par une IA.",
     "back": "Retour à l'accueil"
+  },
+  "Theme": {
+    "label": "Apparence",
+    "mode": "Mode",
+    "accent": "Couleur d'accent",
+    "light": "Jour",
+    "dark": "Nuit",
+    "system": "Auto",
+    "accents": {
+      "blue": "Bleu",
+      "violet": "Violet",
+      "emerald": "Émeraude",
+      "amber": "Ambre",
+      "rose": "Rose"
+    }
   }
 }

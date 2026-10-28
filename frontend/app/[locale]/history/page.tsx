@@ -19,7 +19,7 @@ async function HistoryContent() {
   if (!data) {
     return (
       <div className="flex flex-col gap-4">
-        <p className="text-foreground/70">{t("signInPrompt")}</p>
+        <p className="text-muted">{t("signInPrompt")}</p>
         <AuthPanel email={null} />
       </div>
     );
@@ -51,9 +51,9 @@ export default async function HistoryPage({
   const t = await getTranslations("History");
 
   return (
-    <main className="mx-auto flex w-full max-w-3xl flex-col gap-8 px-6 py-10">
+    <main className="mx-auto flex w-full max-w-4xl flex-col gap-8 px-6 py-8">
       <SiteHeader />
-      <h1 className="text-2xl font-semibold">{t("title")}</h1>
+      <h1 className="text-3xl font-bold tracking-tight">{t("title")}</h1>
       <Suspense>
         <HistoryContent />
       </Suspense>

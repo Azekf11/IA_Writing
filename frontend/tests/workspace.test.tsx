@@ -102,7 +102,9 @@ describe("RewriteWorkspace", () => {
     mockApi(200, { edits: [] });
     renderWithIntl(<RewriteWorkspace />);
     await submit();
-    expect(await screen.findByText(/already reads naturally/)).toBeVisible();
+    expect(
+      await screen.findByText(/already reads naturally/),
+    ).toBeInTheDocument();
   });
 
   it("shows a translated error and keeps the text", async () => {

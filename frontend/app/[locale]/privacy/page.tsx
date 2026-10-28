@@ -17,16 +17,19 @@ export default async function PrivacyPage({
   const t = await getTranslations("Privacy");
 
   return (
-    <main className="mx-auto flex w-full max-w-3xl flex-col gap-8 px-6 py-10">
+    <main className="mx-auto flex w-full max-w-4xl flex-col gap-8 px-6 py-8">
       <SiteHeader />
       <div className="flex flex-col gap-2">
-        <h1 className="text-2xl font-semibold">{t("title")}</h1>
-        <p className="text-foreground/70">{t("intro")}</p>
+        <h1 className="text-3xl font-bold tracking-tight">{t("title")}</h1>
+        <p className="text-muted">{t("intro")}</p>
       </div>
       {SECTIONS.map((section) => (
-        <section key={section} className="flex flex-col gap-2">
+        <section
+          key={section}
+          className="flex flex-col gap-2 rounded-xl border border-border bg-surface p-5"
+        >
           <h2 className="text-lg font-medium">{t(`${section}Title`)}</h2>
-          <p className="leading-relaxed">{t(section)}</p>
+          <p className="leading-relaxed text-muted">{t(section)}</p>
         </section>
       ))}
       <SiteFooter />
