@@ -1,11 +1,11 @@
-"""Download the curated Gutenberg books and sample clean prose passages from them.
+"""Sample clean prose passages from the curated Gutenberg books.
 
 Usage (from backend/):
     uv run python scripts/build_style_corpus.py
     uv run python scripts/build_style_corpus.py --per-book 40 --seed 0
 
-The catalog (data/style/pg_catalog.csv) comes from
-https://www.gutenberg.org/cache/epub/feeds/pg_catalog.csv
+The catalog (data/style/pg_catalog.csv) is Gutenberg's machine-readable catalog, and the books
+must already be in data/style/raw/<id>.txt (see aiwd/style/gutenberg.py for how to get them).
 Sampling is seeded, so the same books give the same passages on every run.
 """
 
@@ -20,7 +20,7 @@ from pathlib import Path
 from aiwd.style.books import KIND_BY_ID
 from aiwd.style.catalog import load_catalog
 from aiwd.style.clean import sample_passages, word_count
-from aiwd.style.gutenberg import download, strip_boilerplate
+from aiwd.style.gutenberg import read_book, strip_boilerplate
 
 BACKEND = Path(__file__).resolve().parents[1]
 STYLE_DIR = BACKEND / "data/style"
@@ -47,7 +47,7 @@ def main() -> None:
         if book is None or not book.public_domain or book.lang not in ("en", "fr"):
             raise SystemExit(f"book {gutenberg_id} is missing, not public domain or not en/fr")
 
-        raw = strip_boilerplate(download(gutenberg_id, Path(args.raw)))
+        raw = strip_boilerplate(read_book(gutenberg_id, Path(args.raw)))
         passages = sample_passages(gutenberg_id, raw, args.per_book, args.seed)
         print(f"{gutenberg_id:>6} {book.author[:22]:<22} {book.title[:40]:<40} {len(passages):>3}")
         for passage in passages:

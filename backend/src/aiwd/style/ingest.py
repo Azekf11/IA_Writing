@@ -35,7 +35,10 @@ def to_rows(passages: Iterable[dict], embedder: Embedder) -> Iterator[dict]:
             continue
         yield dict(
             id=passage["id"],
-            gutenberg_id=passage["gutenberg_id"],
+            source=passage.get("source", "gutenberg"),
+            collection=passage.get("collection"),
+            gutenberg_id=passage.get("gutenberg_id"),
+            year=passage.get("year"),
             author=passage["author"],
             title=passage["title"],
             lang=passage["lang"],

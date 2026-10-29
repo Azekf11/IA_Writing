@@ -6,7 +6,8 @@ export type Reference = {
   id: string;
   author: string;
   title: string;
-  kind: "fiction" | "essay";
+  kind: "fiction" | "essay" | "book" | "news";
+  year: number | null;
   body: string;
   similarity: number;
 };

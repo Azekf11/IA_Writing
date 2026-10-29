@@ -7,6 +7,7 @@ const ref = (over: Partial<Reference> = {}): Reference => ({
   author: "Jane Austen",
   title: "Emma",
   kind: "fiction",
+  year: 1815,
   body: "A plain sentence.",
   similarity: 0.5,
   ...over,
@@ -22,7 +23,9 @@ describe("buildUserMessage", () => {
     expect(message.indexOf("<style_references>")).toBeLessThan(
       message.indexOf("<text>"),
     );
-    expect(message).toContain('<reference author="Jane Austen" title="Emma">');
+    expect(message).toContain(
+      '<reference kind="fiction" source="Jane Austen">',
+    );
   });
 
   it("cannot be escaped by a closing tag inside the text", () => {
@@ -41,9 +44,9 @@ describe("buildUserMessage", () => {
     expect(message.match(/<\/style_references>/g)).toHaveLength(1);
   });
 
-  it("keeps quotes in titles from breaking the attribute", () => {
-    const message = buildUserMessage("hello", [ref({ title: 'Say "hi"' })]);
-    expect(message).toContain('title="Say  hi "');
+  it("keeps quotes in the source name from breaking the attribute", () => {
+    const message = buildUserMessage("hello", [ref({ author: 'Say "hi"' })]);
+    expect(message).toContain('source="Say  hi "');
   });
 });
 

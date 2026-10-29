@@ -1,6 +1,6 @@
 import pytest
 
-from aiwd.style.gutenberg import download, strip_boilerplate
+from aiwd.style.gutenberg import read_book, strip_boilerplate
 
 RAW = (
     "license header\n*** START OF THE PROJECT GUTENBERG EBOOK TEST ***\n"
@@ -25,15 +25,11 @@ def test_strip_boilerplate_refuses_text_without_markers():
         strip_boilerplate("just some text")
 
 
-def test_download_fetches_once_then_reads_the_cache(tmp_path):
-    calls: list[str] = []
+def test_read_book_reads_a_saved_file(tmp_path):
+    (tmp_path / "42.txt").write_text(RAW, encoding="utf-8")
+    assert read_book(42, tmp_path) == RAW
 
-    def fetcher(url: str) -> str:
-        calls.append(url)
-        return RAW
 
-    first = download(42, tmp_path, fetcher=fetcher, pause=0)
-    second = download(42, tmp_path, fetcher=fetcher, pause=0)
-    assert first == second == RAW
-    assert calls == ["https://www.gutenberg.org/cache/epub/42/pg42.txt"]
-    assert (tmp_path / "42.txt").exists()
+def test_read_book_never_downloads_and_explains_why(tmp_path):
+    with pytest.raises(FileNotFoundError, match="not with a script"):
+        read_book(42, tmp_path)

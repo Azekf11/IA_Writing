@@ -91,14 +91,17 @@ class Passage:
     text: str
 
 
+def spread(pool_size: int, per: int, key: str) -> list[int]:
+    """`per` indices spread across `pool_size` items, the same ones on every run."""
+    if pool_size <= per:
+        return list(range(pool_size))
+    rng = random.Random(key)
+    # One pick per equal slice keeps the beginning, middle and end represented
+    edges = [round(i * pool_size / per) for i in range(per + 1)]
+    return [rng.randrange(a, max(b, a + 1)) for a, b in zip(edges, edges[1:], strict=False)]
+
+
 def sample_passages(book_id: int, text: str, per_book: int, seed: int = 0) -> list[Passage]:
     """`per_book` passages spread across the whole book, the same ones on every run."""
     pool = candidates(text)
-    if len(pool) <= per_book:
-        chosen = list(range(len(pool)))
-    else:
-        rng = random.Random(f"{seed}-{book_id}")
-        # One pick per equal slice keeps the beginning, middle and end of the book represented
-        edges = [round(i * len(pool) / per_book) for i in range(per_book + 1)]
-        chosen = [rng.randrange(a, max(b, a + 1)) for a, b in zip(edges, edges[1:], strict=False)]
-    return [Passage(book_id, index, pool[index]) for index in chosen]
+    return [Passage(book_id, i, pool[i]) for i in spread(len(pool), per_book, f"{seed}-{book_id}")]

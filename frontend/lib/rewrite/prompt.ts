@@ -25,9 +25,9 @@ Fix patterns that make text sound generated:
 Do not flag simple vocabulary, typos, informal style or correct grammar. They are not signs of anything.
 
 Style references:
-- The user message may also contain <style_references>: short excerpts by well-regarded authors, in the language of the text.
+- The user message may also contain <style_references>: short excerpts of published prose (books, essays, newspapers) in the language of the text. The text was scanned from print, so ignore any stray OCR error in them.
 - Use them only as a guide to rhythm, concreteness and directness: varied sentence length, specific nouns and verbs, plain statements over abstractions.
-- Never copy their words or phrases, never imitate their period vocabulary or their subject matter, and never mention them in an edit or a reason.
+- Never copy their words or phrases, never imitate their period vocabulary, spelling or subject matter, and never mention them in an edit or a reason.
 - The author's own meaning and voice come first. If a reference does not fit the text, ignore it.`;
 
 // A closing tag inside the data would end its block early
@@ -44,7 +44,7 @@ export function buildUserMessage(
 ): string {
   const blocks = references.map(
     (ref) =>
-      `<reference author="${attr(ref.author)}" title="${attr(ref.title)}">\n${neutralize(ref.body)}\n</reference>`,
+      `<reference kind="${ref.kind}" source="${attr(ref.author)}">\n${neutralize(ref.body)}\n</reference>`,
   );
   const refs = blocks.length
     ? `<style_references>\n${blocks.join("\n")}\n</style_references>\n`
