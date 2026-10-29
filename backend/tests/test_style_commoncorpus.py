@@ -34,6 +34,11 @@ def test_fix_mojibake_repairs_utf8_read_as_latin1():
     assert fix_mojibake("déjà propre") == "déjà propre"
 
 
+def test_fix_mojibake_turns_cp1252_control_characters_into_punctuation():
+    assert fix_mojibake("need \x97 unless") == "need \u2014 unless"
+    assert fix_mojibake("\x93quoted\x94 and it\x92s") == "\u201cquoted\u201d and it\u2019s"
+
+
 @pytest.mark.parametrize(
     ("change", "kept"),
     [

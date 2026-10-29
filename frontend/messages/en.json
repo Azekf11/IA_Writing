@@ -5,7 +5,7 @@
   },
   "Home": {
     "title": "IA Writing",
-    "tagline": "Paste a text and get targeted edits that remove stock phrases and filler, guided by prose from great authors.",
+    "tagline": "Paste a text. Get targeted edits that cut stock phrases and filler, guided by real prose from books and journalism. You accept or reject every change.",
     "headline": "Write like a person, not a template.",
     "steps": {
       "one": {
@@ -20,7 +20,26 @@
         "title": "Decide",
         "body": "Accept or reject every edit, then copy the result."
       }
-    }
+    },
+    "eyebrow": "AI-assisted editing, you stay in charge",
+    "demoTitle": "What it does",
+    "demoBefore": "Before",
+    "demoAfter": "After",
+    "demoOriginal": "In today's fast-paced world, it is crucial to understand that effective communication plays a pivotal role in fostering meaningful connections.",
+    "demoRewrite": "Good communication helps people connect.",
+    "demoReason": "Drops the stock opener and the inflated wording.",
+    "stats": {
+      "sources": "Reference passages",
+      "languages": "Languages",
+      "control": "Edits you approve"
+    },
+    "statsValue": {
+      "sources": "30k+",
+      "languages": "EN · FR",
+      "control": "100%"
+    },
+    "sourcesTitle": "Where the style references come from",
+    "sourcesBody": "Public-domain books and essays, historical newspapers, and recent news and magazine articles (up to 2022, before AI-written text flooded the web). Excerpts stay on our server; you only see who they came from."
   },
   "Editor": {
     "label": "Your text",
@@ -92,7 +111,10 @@
     "edits": "{count, plural, one {# edit} other {# edits}}",
     "details": "Show details",
     "delete": "Delete",
-    "unavailable": "History is not configured."
+    "unavailable": "History is not configured.",
+    "emptyHint": "Your rewrites will show up here once you run one.",
+    "deleteFailed": "Could not delete this entry. Try again.",
+    "confirmDelete": "Delete this entry?"
   },
   "Footer": {
     "privacy": "Privacy",

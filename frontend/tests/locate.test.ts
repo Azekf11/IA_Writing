@@ -58,4 +58,28 @@ describe("locateEdits", () => {
     const [result] = locateEdits(text, [edit("au lait")]);
     expect(text.slice(result.start, result.end)).toBe("au lait");
   });
+
+  it("finds a quote the model retyped with straight quotes", () => {
+    const text = "She said “it’s fine” and left.";
+    const [result] = locateEdits(text, [edit('said "it\'s fine"')]);
+    expect(text.slice(result.start, result.end)).toBe("said “it’s fine”");
+    // The edit now carries the exact original text, so the diff lines up
+    expect(result.original).toBe("said “it’s fine”");
+  });
+
+  it("finds a quote whose line break was replaced by a space", () => {
+    const text = "first line\nsecond line continues here";
+    const [result] = locateEdits(text, [edit("line second line")]);
+    expect(text.slice(result.start, result.end)).toBe("line\nsecond line");
+  });
+
+  it("finds a quote the model typed with a plain space", () => {
+    const text = "Le prix : 5 euros";
+    const [result] = locateEdits(text, [edit("prix : 5 euros")]);
+    expect(text.slice(result.start, result.end)).toBe("prix : 5 euros");
+  });
+
+  it("still drops a quote that is really absent", () => {
+    expect(locateEdits("Hello world", [edit("goodbye moon")])).toEqual([]);
+  });
 });

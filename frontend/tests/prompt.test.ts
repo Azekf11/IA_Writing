@@ -51,6 +51,24 @@ describe("buildUserMessage", () => {
 });
 
 describe("SYSTEM_PROMPT", () => {
+  it("orders tells from structural to vocabulary, and says what to leave alone", () => {
+    const structural = SYSTEM_PROMPT.indexOf("Structural tells");
+    const vocabulary = SYSTEM_PROMPT.indexOf("Vocabulary and phrasing tells");
+    expect(structural).toBeGreaterThan(-1);
+    expect(vocabulary).toBeGreaterThan(structural);
+    expect(SYSTEM_PROMPT).toMatch(/Leave these alone/);
+  });
+
+  it("forbids changing facts and inventing details", () => {
+    expect(SYSTEM_PROMPT).toMatch(/never invent a detail/);
+    expect(SYSTEM_PROMPT).toMatch(/no fact, name, number, date or quote/);
+  });
+
+  it("covers English and French examples", () => {
+    expect(SYSTEM_PROMPT).toMatch(/In today's fast-paced world/);
+    expect(SYSTEM_PROMPT).toMatch(/Il est important de noter/);
+  });
+
   it("tells Claude to treat references as guidance, not as text to copy", () => {
     expect(SYSTEM_PROMPT).toMatch(/Never copy their words/);
     expect(SYSTEM_PROMPT).toMatch(/own meaning and voice come first/);

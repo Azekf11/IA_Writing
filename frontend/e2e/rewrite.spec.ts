@@ -121,3 +121,44 @@ test.describe("appearance", () => {
     await expect(page.getByRole("radio", { name: "Nuit" })).toBeVisible();
   });
 });
+
+test.describe("home page", () => {
+  test("shows the pitch, a before/after example and where references come from", async ({
+    page,
+  }) => {
+    await page.goto("/en");
+    await expect(page.getByRole("heading", { level: 1 })).toContainText(
+      "Write like a person",
+    );
+    await expect(page.getByText("Before", { exact: true })).toBeVisible();
+    await expect(page.getByText("After", { exact: true })).toBeVisible();
+    await expect(
+      page.getByRole("heading", {
+        name: "Where the style references come from",
+      }),
+    ).toBeVisible();
+  });
+
+  test("is translated in French", async ({ page }) => {
+    await page.goto("/fr");
+    await expect(page.getByRole("heading", { level: 1 })).toContainText(
+      "Écrivez comme une personne",
+    );
+    await expect(page.getByText("Avant", { exact: true })).toBeVisible();
+  });
+
+  test("does not scroll sideways on a phone", async ({ browser }) => {
+    const context = await browser.newContext({
+      viewport: { width: 360, height: 740 },
+    });
+    const page = await context.newPage();
+    await page.goto("/en");
+    const overflow = await page.evaluate(
+      () =>
+        document.documentElement.scrollWidth -
+        document.documentElement.clientWidth,
+    );
+    expect(overflow).toBeLessThanOrEqual(0);
+    await context.close();
+  });
+});

@@ -31,14 +31,14 @@ const call = (body: unknown) =>
 // Fake Supabase client: signed-in user, quota result and insert result
 function fakeSupabase({
   userId = "user-1" as string | null,
-  quota = 1 as number | null,
+  reservation = "res-1" as string | null,
   quotaError = null as { code: string } | null,
   insertError = null as { code: string } | null,
 } = {}) {
   const insert = vi.fn().mockResolvedValue({ error: insertError });
   const rpc = vi.fn(async (name: string) =>
-    name === "consume_quota"
-      ? { data: quota, error: quotaError }
+    name === "reserve_quota"
+      ? { data: reservation, error: quotaError }
       : { data: null, error: null },
   );
   const client = {
@@ -114,7 +114,7 @@ describe("POST /api/rewrite", () => {
   });
 
   it("blocks the request when the daily quota is used up", async () => {
-    const { client } = fakeSupabase({ quota: -1 });
+    const { client } = fakeSupabase({ reservation: null });
     createClient.mockResolvedValue(client);
     const response = await call({ text: "hello" });
     expect(response.status).toBe(429);
@@ -127,13 +127,16 @@ describe("POST /api/rewrite", () => {
     createClient.mockResolvedValue(client);
     requestEdits.mockResolvedValue([]);
     await call({ text: "hello" });
-    expect(rpc).toHaveBeenCalledWith("consume_quota", {
+    expect(rpc).toHaveBeenCalledWith("reserve_quota", {
       daily_limit: DAILY_LIMIT,
     });
   });
 
   it("does not call Claude when the quota check errors", async () => {
-    const { client } = fakeSupabase({ quota: null, quotaError: { code: "x" } });
+    const { client } = fakeSupabase({
+      reservation: null,
+      quotaError: { code: "x" },
+    });
     createClient.mockResolvedValue(client);
     const response = await call({ text: "hello" });
     expect(response.status).toBe(500);
@@ -218,7 +221,7 @@ describe("POST /api/rewrite", () => {
     const response = await call({ text: "hello" });
     expect(response.status).toBe(503);
     expect(await response.json()).toEqual({ error: "busy" });
-    expect(rpc).toHaveBeenCalledWith("refund_quota");
+    expect(rpc).toHaveBeenCalledWith("release_quota", { reservation: "res-1" });
     expect(insert).not.toHaveBeenCalled();
   });
 

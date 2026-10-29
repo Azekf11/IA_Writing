@@ -9,13 +9,19 @@ insert into auth.users (id, instance_id, aud, role, email) values
 -- act as user A
 set role authenticated;
 select set_config('request.jwt.claims', '{"sub":"11111111-1111-1111-1111-111111111111","role":"authenticated"}', false);
-\echo '== quota: limit 2 -> expect 1, 2, -1'
-select public.consume_quota(2);
-select public.consume_quota(2);
-select public.consume_quota(2);
-\echo '== refund -> then expect 2 again'
-select public.refund_quota();
-select public.consume_quota(2);
+\echo '== quota: reserve x3 with limit 2 -> id, id, NULL'
+create temp table r(n int, id uuid);
+insert into r select 1, public.reserve_quota(2);
+insert into r select 2, public.reserve_quota(2);
+insert into r select 3, public.reserve_quota(2);
+select n, id is not null as granted from r order by n;
+\echo '== a made-up reservation id gives nothing back (expect f)'
+select public.release_quota(gen_random_uuid());
+\echo '== a real release works once (expect t then f), and frees exactly one slot'
+select public.release_quota((select id from r where n = 1));
+select public.release_quota((select id from r where n = 1));
+select public.reserve_quota(2) is not null as granted;
+select public.reserve_quota(2) is not null as granted;
 
 \echo '== insert own history (ok)'
 insert into public.rewrites (user_id, original, locale) values ('11111111-1111-1111-1111-111111111111','hello','en');
@@ -38,13 +44,13 @@ select count(*) from public.usage;
 \echo '== user B delete A row affects 0 rows'
 delete from public.rewrites;
 \echo '== user B has own fresh quota (expect 1)'
-select public.consume_quota(2);
+select public.reserve_quota(2) is not null as fresh_quota_for_b;
 
 -- anonymous
 reset role;
 set role anon;
-\echo '== anon cannot call consume_quota (must FAIL)'
-select public.consume_quota(2);
+\echo '== anon cannot call reserve_quota (must FAIL)'
+select public.reserve_quota(2);
 \echo '== anon cannot read rewrites (must FAIL)'
 select count(*) from public.rewrites;
 

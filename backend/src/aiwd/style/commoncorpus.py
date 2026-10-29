@@ -59,14 +59,27 @@ COLUMNS = [
 ]  # fmt: skip
 
 
+# Control characters (0x80-0x9f) are what Windows-1252 punctuation becomes when it is mislabeled
+_CP1252_PUNCTUATION = str.maketrans(
+    {
+        "\x91": "\u2018", "\x92": "\u2019", "\x93": "\u201c", "\x94": "\u201d",
+        "\x96": "\u2013", "\x97": "\u2014", "\x85": "\u2026", "\xa0": " ",
+    }
+)  # fmt: skip
+
+
 def fix_mojibake(text: str) -> str:
-    """Repair UTF-8 that was read as Latin-1 (\"m\u00c3\u00a9tiers\" -> \"m\u00e9tiers\")."""
-    if "\u00c3" not in text and "\u00c2" not in text:
-        return text
-    try:
-        return text.encode("latin-1").decode("utf-8")
-    except (UnicodeEncodeError, UnicodeDecodeError):
-        return text
+    """Repair text that was decoded with the wrong charset.
+
+    UTF-8 read as Latin-1 ("m\u00c3\u00a9tiers" -> "m\u00e9tiers"), and Windows-1252 dashes and
+    quotes that arrive as invisible control characters.
+    """
+    if "\u00c3" in text or "\u00c2" in text:
+        try:
+            text = text.encode("latin-1").decode("utf-8")
+        except (UnicodeEncodeError, UnicodeDecodeError):
+            pass
+    return text.translate(_CP1252_PUNCTUATION)
 
 
 def select_documents(meta: pd.DataFrame) -> pd.DataFrame:

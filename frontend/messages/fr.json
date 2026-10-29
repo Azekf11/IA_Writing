@@ -5,7 +5,7 @@
   },
   "Home": {
     "title": "IA Writing",
-    "tagline": "Collez un texte et obtenez des corrections ciblées qui retirent les formules toutes faites, guidées par la prose de grands auteurs.",
+    "tagline": "Collez un texte. Obtenez des corrections ciblées qui retirent les formules toutes faites et le remplissage, guidées par de la vraie prose de livres et de presse. Vous acceptez ou refusez chaque changement.",
     "headline": "Écrivez comme une personne, pas comme un modèle.",
     "steps": {
       "one": {
@@ -20,7 +20,26 @@
         "title": "Choisissez",
         "body": "Acceptez ou refusez chaque modification, puis copiez le résultat."
       }
-    }
+    },
+    "eyebrow": "Édition assistée par IA, vous gardez la main",
+    "demoTitle": "Ce que ça fait",
+    "demoBefore": "Avant",
+    "demoAfter": "Après",
+    "demoOriginal": "Dans un monde en constante évolution, il est crucial de comprendre que la communication efficace joue un rôle essentiel dans la création de liens significatifs.",
+    "demoRewrite": "Bien communiquer aide les gens à se rapprocher.",
+    "demoReason": "Retire l'ouverture toute faite et les mots gonflés.",
+    "stats": {
+      "sources": "Passages de référence",
+      "languages": "Langues",
+      "control": "Modifications validées par vous"
+    },
+    "statsValue": {
+      "sources": "30k+",
+      "languages": "EN · FR",
+      "control": "100%"
+    },
+    "sourcesTitle": "D'où viennent les références de style",
+    "sourcesBody": "Livres et essais du domaine public, journaux anciens, et articles récents de presse et de magazines (jusqu'en 2022, avant que le texte écrit par IA n'inonde le web). Les extraits restent sur notre serveur : vous voyez seulement leur origine."
   },
   "Editor": {
     "label": "Votre texte",
@@ -92,7 +111,10 @@
     "edits": "{count, plural, one {# modification} other {# modifications}}",
     "details": "Afficher le détail",
     "delete": "Supprimer",
-    "unavailable": "L'historique n'est pas configuré."
+    "unavailable": "L'historique n'est pas configuré.",
+    "emptyHint": "Vos réécritures apparaîtront ici dès que vous en lancerez une.",
+    "deleteFailed": "Impossible de supprimer cette entrée. Réessayez.",
+    "confirmDelete": "Supprimer cette entrée ?"
   },
   "Footer": {
     "privacy": "Confidentialité",

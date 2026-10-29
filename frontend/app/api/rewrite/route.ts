@@ -1,5 +1,6 @@
 import { RewriteError, requestEdits } from "@/lib/rewrite/claude";
 import { DAILY_LIMIT } from "@/lib/rewrite/limits";
+import { guardEdits } from "@/lib/rewrite/guard";
 import { locateEdits } from "@/lib/rewrite/locate";
 import { RewriteRequestSchema } from "@/lib/rewrite/schema";
 import type {
@@ -43,22 +44,24 @@ export async function POST(request: Request) {
   const userId = data?.claims.sub;
   if (!userId) return fail("unauthorized", 401);
 
-  // Take the quota first so parallel requests can't bypass the limit
-  const { data: used, error: quotaError } = await supabase.rpc(
-    "consume_quota",
+  // Reserve the quota first so parallel requests can't bypass the limit
+  const { data: reservation, error: quotaError } = await supabase.rpc(
+    "reserve_quota",
     { daily_limit: DAILY_LIMIT },
   );
   if (quotaError) {
     console.error("Quota check failed", quotaError.code);
     return fail("server_error", 500);
   }
-  if (used === -1) return fail("quota_exceeded", 429);
+  if (!reservation) return fail("quota_exceeded", 429);
 
   const { text, locale } = parsed.data;
   try {
     const references = await findReferences(supabase, text, locale);
     const rawEdits = await requestEdits(text, references);
-    const edits = locateEdits(text, rawEdits);
+    const { kept, dropped } = guardEdits(rawEdits);
+    const edits = locateEdits(text, kept);
+    if (Object.keys(dropped).length > 0) console.info("Edits dropped", dropped);
 
     // History is a bonus: a failed save must not lose the result
     const { error: saveError } = await supabase.from("rewrites").insert({
@@ -76,8 +79,8 @@ export async function POST(request: Request) {
       references: credits,
     } satisfies RewriteResponse);
   } catch (error) {
-    // The user got nothing, so give the request back
-    await supabase.rpc("refund_quota");
+    // The user got nothing, so give the request back with the ticket only we hold
+    await supabase.rpc("release_quota", { reservation });
     if (error instanceof RewriteError) return fail(error.code, error.status);
     console.error("Unhandled rewrite error", error);
     return fail("server_error", 500);

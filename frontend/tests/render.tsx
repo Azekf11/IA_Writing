@@ -9,7 +9,11 @@ const all = { en, fr };
 // Render a component inside the i18n provider for the given locale
 export function renderWithIntl(ui: ReactElement, locale: "en" | "fr" = "en") {
   return render(
-    <NextIntlClientProvider locale={locale} messages={all[locale]}>
+    <NextIntlClientProvider
+      locale={locale}
+      messages={all[locale]}
+      timeZone="Europe/Paris"
+    >
       {ui}
     </NextIntlClientProvider>,
   );

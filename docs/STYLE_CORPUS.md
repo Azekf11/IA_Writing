@@ -1,21 +1,37 @@
 # Style corpus and vector search
 
-The rewriter shows Claude a few excerpts of good prose as a guide to rhythm and
+The rewriter shows Claude a few excerpts of published prose as a guide to rhythm and
 concreteness. Claude does not learn from them: they are looked up per request
 (retrieval), then dropped into the prompt.
 
 ```
-Gutenberg books -> clean passages -> embeddings -> pgvector -> top 3 -> Claude prompt
+sources -> clean passages -> embeddings -> pgvector -> top 3 -> Claude prompt
 ```
 
 ## Sources
 
-- Public-domain books from Project Gutenberg, picked by hand in
-  `backend/src/aiwd/style/books.py` (123 books, English and French, fiction and
-  essays). No Wikipedia, no web scraping, no translations.
-- Title, author, language and death year are read from the official Gutenberg
-  catalog, never typed by hand. The build stops if an author died after 1955.
-- Excerpts stay on the server. The browser only receives author and title.
+| Source | What | Period | Script |
+| ------ | ---- | ------ | ------ |
+| Project Gutenberg | 123 hand-picked books and essays, en/fr | 1600s to 1950 | `build_style_corpus.py` |
+| Common Corpus (Pleias) | Public-domain books and newspapers, en/fr | 1531 to 1950 | `build_common_corpus.py` |
+| C4 realnewslike | News articles from reputable sites, en | crawled 2019 | `build_web_corpus.py` |
+| FineWeb-2 | News and magazine pages, fr | crawls 2013 to 2022 | `build_web_corpus.py` |
+
+The web sources are filtered to the sites listed in `backend/src/aiwd/style/web.py`
+(press, magazines, public broadcasters). Editing that list is the editorial control:
+add or remove a domain and rebuild. No single site may exceed 12% of its language.
+
+Why crawls stop at 2022: from late 2022 a growing share of web text is written by language
+models, which would defeat the point of a human-written reference. This is a cut-off by
+date, not a detector: some earlier text may still have been machine-assisted.
+
+Other rules, whatever the source:
+- Gutenberg metadata (title, author, language, death year) comes from its official catalog,
+  and the build stops if an author died after 1955. Gutenberg forbids automated downloads
+  from its website, so books are read from disk (see `aiwd/style/gutenberg.py`).
+- Book, newspaper and web text is OCR or HTML, so every passage goes through the noise filter
+  in `aiwd/style/quality.py` and is deduplicated.
+- Excerpts stay on the server. The browser only receives an author, a site or a title.
 
 ## Rebuild from scratch
 
@@ -31,13 +47,18 @@ curl -o data/style/pg_catalog.csv https://www.gutenberg.org/cache/epub/feeds/pg_
 # 2. Download the books (cached in data/style/raw) and sample passages
 uv run python scripts/build_style_corpus.py            # -> data/style/passages.jsonl
 
+# 2b. Same for the other sources (parquet files are cached by huggingface_hub)
+uv run python scripts/build_vocab.py                   # word lists for the noise filter
+uv run python scripts/build_common_corpus.py           # -> data/style/passages_cc.jsonl
+uv run python scripts/build_web_corpus.py              # -> data/style/passages_web.jsonl
+
 # 3. Shrink the embedding model into frontend/data/embedder (committed, ~29 MB)
 uv run python scripts/export_embedder.py
 
 # 4. Embed and load into Supabase
 export SUPABASE_URL=https://<project-ref>.supabase.co
 export SUPABASE_SECRET_KEY=...     # Dashboard > Settings > API Keys. Never commit it.
-uv run python scripts/ingest_style.py                  # --dry-run to check first
+uv run python scripts/ingest_style.py                  # every passages*.jsonl; --dry-run first
 ```
 
 Step 4 is safe to repeat: rows are upserted by id.
