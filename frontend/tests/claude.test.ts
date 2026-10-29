@@ -1,6 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { describe, expect, it, vi } from "vitest";
-import { requestEdits, RewriteError } from "@/lib/rewrite/claude";
+import { requestEdits, RewriteError, streamEdits } from "@/lib/rewrite/claude";
 
 // Minimal stand-in for the SDK client
 function fakeClient(parse: ReturnType<typeof vi.fn>) {
@@ -81,5 +81,102 @@ describe("requestEdits", () => {
     const parse = vi.fn().mockRejectedValue(error);
     const code = await codeOf(requestEdits("a", [], fakeClient(parse)));
     expect(code).toBe("upstream_error");
+  });
+});
+
+// A stand-in for client.messages.stream: emits the answer in pieces, then resolves the final message
+function fakeStream(
+  pieces: string[],
+  final: Record<string, unknown> = { stop_reason: "end_turn" },
+) {
+  const handlers: Record<string, (value: string) => void> = {};
+  const stream = {
+    on: (event: string, handler: (value: string) => void) => {
+      handlers[event] = handler;
+      return stream;
+    },
+    finalMessage: async () => {
+      for (const piece of pieces) handlers.text?.(piece);
+      return final;
+    },
+  };
+  const options: unknown[] = [];
+  const client = {
+    messages: {
+      stream: (_params: unknown, opts: unknown) => {
+        options.push(opts);
+        return stream;
+      },
+    },
+  } as unknown as Pick<Anthropic, "messages">;
+  return { client, options };
+}
+
+const answer = JSON.stringify({
+  edits: [
+    { original: "a", replacement: "b", reason: "c" },
+    { original: "d", replacement: "e", reason: "f" },
+  ],
+});
+
+describe("streamEdits", () => {
+  it("hands each edit over as the pieces arrive, and returns them all", async () => {
+    const { client } = fakeStream(answer.match(/[\s\S]{1,9}/g) ?? []);
+    const seen: string[] = [];
+    const all = await streamEdits(
+      "a d",
+      [],
+      (e) => seen.push(e.original),
+      {},
+      client,
+    );
+    expect(seen).toEqual(["a", "d"]);
+    expect(all).toHaveLength(2);
+  });
+
+  it("passes the abort signal on to the request", async () => {
+    const { client, options } = fakeStream([answer]);
+    const controller = new AbortController();
+    await streamEdits("a d", [], () => {}, {}, client, controller.signal);
+    expect(options[0]).toMatchObject({ signal: controller.signal });
+  });
+
+  it("keeps the edits that arrived before the answer was cut off", async () => {
+    const cut = answer.slice(0, answer.indexOf('"d"') - 2);
+    const { client } = fakeStream([cut], { stop_reason: "max_tokens" });
+    const all = await streamEdits("a d", [], () => {}, {}, client);
+    expect(all).toHaveLength(1);
+  });
+
+  it("fails when the answer was cut off before any edit", async () => {
+    const { client } = fakeStream(['{"edits":[{"orig'], {
+      stop_reason: "max_tokens",
+    });
+    expect(await codeOf(streamEdits("a", [], () => {}, {}, client))).toBe(
+      "upstream_error",
+    );
+  });
+
+  it("maps a refusal to the refused code", async () => {
+    const { client } = fakeStream([], { stop_reason: "refusal" });
+    expect(await codeOf(streamEdits("a", [], () => {}, {}, client))).toBe(
+      "refused",
+    );
+  });
+
+  it("maps an overloaded service to busy", async () => {
+    const client = {
+      messages: {
+        stream: () => ({
+          on: () => {},
+          finalMessage: async () => {
+            throw apiError(529);
+          },
+        }),
+      },
+    } as unknown as Pick<Anthropic, "messages">;
+    expect(await codeOf(streamEdits("a", [], () => {}, {}, client))).toBe(
+      "busy",
+    );
   });
 });

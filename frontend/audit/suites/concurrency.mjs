@@ -52,7 +52,10 @@ export async function run(t) {
           (await cards.first().textContent()).includes("Entry 3"),
           "newest is not first",
         );
-        await page.getByRole("button", { name: "Delete" }).first().click();
+        await page
+          .getByRole("button", { name: "Delete", exact: true })
+          .first()
+          .click();
         await until(async () => (await cards.count()) === 2, { timeout: 4000 });
         expect((await cards.count()) === 2, "entry still listed");
         expect(
@@ -67,7 +70,10 @@ export async function run(t) {
       "the empty state shows after the last delete",
       async () => {
         for (let i = 0; i < 2; i++)
-          await page.getByRole("button", { name: "Delete" }).first().click();
+          await page
+            .getByRole("button", { name: "Delete", exact: true })
+            .first()
+            .click();
         await page.getByText("No rewrites yet.").waitFor({ timeout: 4000 });
       },
     );

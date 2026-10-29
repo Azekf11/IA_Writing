@@ -68,30 +68,41 @@ function findLoose(text: string, quote: string, taken: Range[]): Range | null {
   return null;
 }
 
-// LLMs count characters badly, so offsets are computed here, not by Claude.
-// `original` is rewritten to the exact text found, so a loose match still diffs cleanly.
-// Edits whose quote is not in the text are dropped.
+export type Located = Omit<Edit, "id">;
+
+// Where one edit's quote sits in the text, or null when it is absent or collides with a
+// range already taken. `original` is rewritten to the exact text found, so a loose match
+// still diffs cleanly. Pushes the range it takes onto `taken`.
+export function locateOne(
+  text: string,
+  edit: RawEdit,
+  taken: Range[],
+): Located | null {
+  if (!edit.original || edit.original === edit.replacement) return null;
+  const exact = findFree(text, edit.original, taken);
+  const range: Range | null =
+    exact !== -1
+      ? [exact, exact + edit.original.length]
+      : findLoose(text, edit.original, taken);
+  if (!range) return null;
+  taken.push(range);
+  return {
+    ...edit,
+    original: text.slice(range[0], range[1]),
+    start: range[0],
+    end: range[1],
+  };
+}
+
+// LLMs count characters badly, so offsets are computed here, not by the model.
+// Edits whose quote is not in the text are dropped; the rest are sorted by position.
 export function locateEdits(text: string, raw: RawEdit[]): Edit[] {
   const taken: Range[] = [];
-  const found: Omit<Edit, "id">[] = [];
-
+  const found: Located[] = [];
   for (const edit of raw) {
-    if (!edit.original || edit.original === edit.replacement) continue;
-    const exact = findFree(text, edit.original, taken);
-    const range: Range | null =
-      exact !== -1
-        ? [exact, exact + edit.original.length]
-        : findLoose(text, edit.original, taken);
-    if (!range) continue;
-    taken.push(range);
-    found.push({
-      ...edit,
-      original: text.slice(range[0], range[1]),
-      start: range[0],
-      end: range[1],
-    });
+    const located = locateOne(text, edit, taken);
+    if (located) found.push(located);
   }
-
   return found
     .sort((a, b) => a.start - b.start)
     .map((edit, index) => ({ id: `edit-${index}`, ...edit }));

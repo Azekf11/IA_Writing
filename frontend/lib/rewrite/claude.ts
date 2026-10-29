@@ -1,7 +1,8 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import type { Reference } from "@/lib/style/retrieve";
-import { buildUserMessage, SYSTEM_PROMPT } from "./prompt";
+import { EditStreamParser } from "./edit-stream";
+import { buildUserMessage, SYSTEM_PROMPT, type MessageOptions } from "./prompt";
 import { ClaudeOutputSchema, type RawEdit } from "./schema";
 import type { ErrorCode } from "./types";
 
@@ -61,26 +62,36 @@ function toRewriteError(error: unknown): RewriteError {
   return new RewriteError("server_error", 500);
 }
 
+const requestParams = (
+  text: string,
+  references: Reference[],
+  options: MessageOptions,
+) => ({
+  model: process.env.ANTHROPIC_MODEL || DEFAULT_MODEL,
+  max_tokens: MAX_TOKENS,
+  system: SYSTEM_PROMPT,
+  output_config: {
+    effort: "medium" as const,
+    format: zodOutputFormat(ClaudeOutputSchema),
+  },
+  // Tags mark the text as data; edits are re-checked against the original
+  messages: [
+    {
+      role: "user" as const,
+      content: buildUserMessage(text, references, options),
+    },
+  ],
+});
+
 export async function requestEdits(
   text: string,
   references: Reference[] = [],
   client: Pick<Anthropic, "messages"> = getClient(),
+  options: MessageOptions = {},
 ): Promise<RawEdit[]> {
   try {
     const message = await client.messages.parse(
-      {
-        model: process.env.ANTHROPIC_MODEL || DEFAULT_MODEL,
-        max_tokens: MAX_TOKENS,
-        system: SYSTEM_PROMPT,
-        output_config: {
-          effort: "medium",
-          format: zodOutputFormat(ClaudeOutputSchema),
-        },
-        // Tags mark the text as data; edits are re-checked against the original
-        messages: [
-          { role: "user", content: buildUserMessage(text, references) },
-        ],
-      },
+      requestParams(text, references, options),
       CALL_OPTIONS,
     );
 
@@ -92,6 +103,44 @@ export async function requestEdits(
       throw new RewriteError("upstream_error", 502);
     }
     return message.parsed_output.edits;
+  } catch (error) {
+    throw toRewriteError(error);
+  }
+}
+
+// Same request, but every edit is handed to `onEdit` the moment the model finishes writing it.
+// Resolves with all edits once the answer is complete.
+export async function streamEdits(
+  text: string,
+  references: Reference[],
+  onEdit: (edit: RawEdit) => void,
+  options: MessageOptions = {},
+  client: Pick<Anthropic, "messages"> = getClient(),
+  signal?: AbortSignal,
+): Promise<RawEdit[]> {
+  const parser = new EditStreamParser();
+  const all: RawEdit[] = [];
+  try {
+    const stream = client.messages.stream(
+      requestParams(text, references, options),
+      { ...CALL_OPTIONS, signal },
+    );
+    stream.on("text", (delta) => {
+      for (const edit of parser.push(delta)) {
+        all.push(edit);
+        onEdit(edit);
+      }
+    });
+    const message = await stream.finalMessage();
+
+    if (message.stop_reason === "refusal") {
+      throw new RewriteError("refused", 422);
+    }
+    // A cut-off answer still holds every edit that was completed before the cut
+    if (all.length === 0 && message.stop_reason === "max_tokens") {
+      throw new RewriteError("upstream_error", 502);
+    }
+    return all;
   } catch (error) {
     throw toRewriteError(error);
   }

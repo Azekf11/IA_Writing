@@ -11,10 +11,18 @@ type Props = {
   edits: Edit[];
   decisions: Record<string, Decision>;
   onDecide: (id: string, decision: Decision) => void;
+  // The edit the keyboard shortcuts act on
+  activeId?: string | null;
 };
 
 // Original text with each suggested edit shown inline for review
-export function DiffView({ text, edits, decisions, onDecide }: Props) {
+export function DiffView({
+  text,
+  edits,
+  decisions,
+  onDecide,
+  activeId = null,
+}: Props) {
   const t = useTranslations("Review");
 
   return (
@@ -37,8 +45,11 @@ export function DiffView({ text, edits, decisions, onDecide }: Props) {
           <span
             key={edit.id}
             data-decision={decision}
+            data-active={edit.id === activeId || undefined}
+            id={`review-${edit.id}`}
             className={cn(
-              "my-2 block rounded-xl border bg-surface p-4 transition-colors",
+              "my-2 block scroll-mt-24 rounded-lg border bg-surface p-4 transition-colors",
+              edit.id === activeId && "ring-2 ring-accent",
               accepted && "border-add/50",
               rejected && "border-border opacity-70",
               decision === "pending" && "border-border shadow-card",

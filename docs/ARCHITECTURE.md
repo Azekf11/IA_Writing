@@ -48,11 +48,13 @@ sequenceDiagram
         R->>DB: nearest 3 passages in the same language
     end
     R->>L: rules + passages + text
-    L-->>R: edits as structured data
-    R->>R: guard: drop unsafe edits
-    R->>R: locate: find each quote in the text
-    R-->>V: edits + who inspired them
-    Note over R,DB: after the answer is sent
+    loop each edit, as the model finishes writing it
+        L-->>R: a piece of the answer
+        R->>R: guard and locate the edit
+        R-->>V: the edit, at once
+    end
+    R-->>V: done
+    Note over R,DB: after the last line is sent
     R->>DB: save to history, free the slot
 ```
 
@@ -63,8 +65,11 @@ The order is deliberate:
 2. **Quota and search side by side.** They do not depend on each other, so the visitor waits for
    the slower of the two, not for both.
 3. **The model last.** It is the slow and paid step, so everything that can fail early does.
-4. **Bookkeeping after the answer.** Saving history and freeing the slot do not change what the
-   visitor sees, so they happen once the response is on its way.
+4. **Edits as they are written.** The route reads the model's answer while it is still coming and
+   sends each edit the moment it is complete, so the visitor starts reviewing early. The guard
+   and the quote-finding run on each edit separately, with the same rules as before.
+5. **Bookkeeping after the answer.** Saving history and freeing the slot do not change what the
+   visitor sees, so they happen once the last line is sent.
 
 ## Why each piece exists
 
@@ -232,8 +237,8 @@ its own: it becomes a list of proposals, and the last word is always the author'
 
 Honest limits of this design, so a personal project is not mistaken for a platform:
 
-- **The model call dominates** the wait. Streaming the answer edit by edit would feel faster; it
-  would also make the guard harder.
+- **The model call dominates** the wait. The answer is streamed so the first edit shows early, but
+  the total time is the model's.
 - **The free database tier** holds this corpus comfortably, but not many times more.
 - **Quota is per user, not per address.** A determined person can make many accounts; a captcha or
   an email allow-list would be the next step.

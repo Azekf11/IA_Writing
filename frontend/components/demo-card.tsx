@@ -1,4 +1,4 @@
-import { ArrowRight, Sparkles } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 import { useTranslations } from "next-intl";
 
 // A fixed before/after example on the home page: shows the product without calling the API
@@ -8,10 +8,9 @@ export function DemoCard() {
   return (
     <section
       aria-label={t("demoTitle")}
-      className="overflow-hidden rounded-2xl border border-border bg-surface shadow-card"
+      className="overflow-hidden rounded-xl border border-border bg-surface shadow-card"
     >
-      <div className="flex items-center gap-2 border-b border-border px-5 py-3 text-xs font-semibold uppercase tracking-wide text-muted">
-        <Sparkles className="size-3.5 text-accent-text" aria-hidden />
+      <div className="border-b border-border px-5 py-3 text-xs font-medium text-muted">
         {t("demoTitle")}
       </div>
 

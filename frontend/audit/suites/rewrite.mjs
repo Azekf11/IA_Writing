@@ -132,13 +132,14 @@ async function reviewChecks(s) {
     },
   );
 
-  await check("rewrite", "Server-Timing says where the time went", async () => {
-    expect(
-      /prep;dur=\d+, model;dur=\d+, total;dur=\d+/.test(timing),
-      `header: "${timing}"`,
-    );
-    return timing;
-  });
+  await check(
+    "rewrite",
+    "the answer reports how long preparing took",
+    async () => {
+      expect(/^prep;dur=\d+$/.test(timing), `header: "${timing}"`);
+      return timing;
+    },
+  );
 
   await check(
     "rewrite",

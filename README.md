@@ -42,6 +42,17 @@ Three rules shape the whole product:
 - **It is an editor, not a detector.** It does not claim to tell who wrote a text, and it makes no
   promise about passing any AI-text detector. Section 8 explains why, with measurements.
 
+### What you can do with it
+
+- Choose how much to change: **light**, **standard** or **thorough**.
+- Paste a few lines of your own writing so the edits stay close to your voice. It is sent with the
+  request and not stored.
+- See edits appear as the model writes them, and **stop** at any point.
+- Review with the keyboard: **A** accept, **R** reject, **J** and **K** move between edits.
+- Copy the result or **download** it as a text file.
+- Search your history, **reopen** a past rewrite with its edits, delete one entry or all of them.
+- Use it in English or French, in day, night or system mode, with five accent colours.
+
 ## 2. How a rewrite works
 
 ```
@@ -53,11 +64,12 @@ Three rules shape the whole product:
                               +-- embed text (in process, 0.4 ms) -> match_style_passages() -> pgvector
                                   (these two run at the same time)
                               build prompt = rules + <text> + 3 style excerpts
-                              Claude -> structured JSON edits
-                              guard  (numbers, markup, size, count)
-                              locate (find each quote, compute offsets)
- edits <---------------------  respond
-                              after the response: save history, free the in-flight slot
+                              Claude writes the answer; each edit is read as soon as it is complete
+                              guard  (numbers, markup, size, count)  +  locate (find the quote)
+ edit  <---------------------  one line per edit, sent at once
+ edit  <---------------------  ...
+ done  <---------------------  end of the answer
+                              after the last line: save history, free the in-flight slot
 ```
 
 1. **Auth.** A magic link (Supabase Auth). The route reads the session cookie and verifies the
@@ -67,16 +79,19 @@ Three rules shape the whole product:
 3. **Style excerpts.** The text is embedded in the server process with a small static model, and
    the three closest passages from the corpus (section 4) are fetched with pgvector.
 4. **Claude.** The system prompt holds the editing rules; the user message holds the text between
-   `<text>` tags, which the prompt declares to be data, never instructions. The answer is
-   constrained to a JSON schema.
+   `<text>` tags, which the prompt declares to be data, never instructions. Two optional blocks
+   can precede it: how much to change (light, standard, thorough) and a sample of the author's own
+   writing, so edits stay close to their voice. The answer is constrained to a JSON schema.
 5. **Guard and locate.** Models count characters badly, so Claude never gives offsets. The server
    finds each quoted passage itself (tolerating curly quotes and non-breaking spaces) and drops
    any it cannot find.
-6. **Review.** The browser shows each edit as a before/after card. The result text updates as you
-   accept or reject.
+6. **Review.** The browser shows each edit as a before/after card, the moment it arrives. The
+   result text updates as you accept or reject, and the keys A, R, J and K work too.
 
-If the model fails, the reservation is released so the request is not lost. If the style search
-fails, the rewrite still runs, without excerpts.
+If the model fails before any edit, the reservation is released so the request is not lost. If it
+fails after some edits, the ones already delivered are kept. If the reader closes the page before
+anything arrived, the request is given back too. If the style search fails, the rewrite still
+runs, without excerpts.
 
 ### Architecture at a glance
 
@@ -197,8 +212,16 @@ tightened explicitly in a migration).
 ## 6. Speed
 
 The wait is dominated by the model call, which takes seconds and cannot be shortened from this
-code. Everything around it was reduced, and measured:
+code. Two things were done about it: the answer is streamed, and everything around it was reduced.
 
+- **The answer is streamed edit by edit.** The model writes a JSON list, and the server reads it as
+  it comes, handing each edit to the page the moment its closing brace arrives. The first edit can
+  be on screen while the fifth is still being written, so the wait feels much shorter even though
+  the total is the same. In the audit, a stand-in model that writes one edit every 900 ms showed the first edit at
+  about 70 % of the time of the whole answer. That gap is set by the test, not measured on a real
+  model, whose timing will differ; the longer the list, the bigger the gain.
+- **The reader can stop.** Stop keeps what has arrived, and closing the page cancels the model
+  call so nobody pays for an answer nobody reads.
 - **Quota and style search run at the same time** instead of one after the other.
 - **History save and slot release run after the response** (`after()`), so the user does not wait
   for them.

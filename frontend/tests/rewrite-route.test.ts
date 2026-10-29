@@ -4,6 +4,7 @@ import { DAILY_LIMIT, MAX_IN_FLIGHT } from "@/lib/rewrite/limits";
 import { MAX_CHARS } from "@/lib/text";
 
 const requestEdits = vi.fn();
+const streamEdits = vi.fn();
 // Work scheduled with after() is collected, so tests can wait for it
 const scheduled: Promise<unknown>[] = [];
 vi.mock("next/server", async (importOriginal) => ({
@@ -17,6 +18,7 @@ const createClient = vi.fn();
 vi.mock("@/lib/rewrite/claude", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/rewrite/claude")>()),
   requestEdits: (...args: unknown[]) => requestEdits(...args),
+  streamEdits: (...args: unknown[]) => streamEdits(...args),
 }));
 const findReferences = vi.fn();
 vi.mock("@/lib/style/retrieve", () => ({
@@ -69,6 +71,7 @@ const EDIT = { original: "world", replacement: "there", reason: "warmer" };
 beforeEach(() => {
   vi.stubEnv("ANTHROPIC_API_KEY", "test-key");
   requestEdits.mockReset();
+  streamEdits.mockReset();
   createClient.mockReset();
   findReferences.mockReset().mockResolvedValue([]);
   vi.spyOn(console, "error").mockImplementation(() => {});
@@ -196,7 +199,10 @@ describe("POST /api/rewrite", () => {
     requestEdits.mockResolvedValue([EDIT]);
 
     const response = await call({ text: "Hello world" });
-    expect(requestEdits).toHaveBeenCalledWith("Hello world", refs);
+    expect(requestEdits).toHaveBeenCalledWith("Hello world", refs, undefined, {
+      strength: "standard",
+      voice: undefined,
+    });
     const body = await response.json();
     expect(body.references).toEqual([{ author: "Jane Austen", title: "Emma" }]);
     // The excerpt itself stays on the server
@@ -274,6 +280,70 @@ describe("POST /api/rewrite", () => {
     expect(response.headers.get("Server-Timing")).toMatch(
       /^prep;dur=\d+, model;dur=\d+, total;dur=\d+$/,
     );
+  });
+
+  it("passes the intensity and the voice to the model", async () => {
+    const { client } = fakeSupabase();
+    createClient.mockResolvedValue(client);
+    requestEdits.mockResolvedValue([]);
+    await call({ text: "hello", strength: "light", voice: "Short lines." });
+    expect(requestEdits).toHaveBeenCalledWith("hello", [], undefined, {
+      strength: "light",
+      voice: "Short lines.",
+    });
+  });
+
+  it("refuses an unknown intensity and an oversized voice", async () => {
+    expect((await call({ text: "hi", strength: "extreme" })).status).toBe(400);
+    expect((await call({ text: "hi", voice: "v".repeat(1501) })).status).toBe(
+      400,
+    );
+    expect(requestEdits).not.toHaveBeenCalled();
+  });
+
+  it("streams when asked: events, then the same bookkeeping", async () => {
+    const { client, insert, rpc } = fakeSupabase();
+    createClient.mockResolvedValue(client);
+    streamEdits.mockImplementation(async (_t, _r, onEdit) => {
+      onEdit({ original: "world", replacement: "there", reason: "warmer" });
+    });
+    const response = await call({ text: "Hello world", stream: true });
+    const lines = (await response.text())
+      .trim()
+      .split("\n")
+      .map((l) => JSON.parse(l));
+    await Promise.all(scheduled.splice(0));
+    expect(response.headers.get("content-type")).toContain("ndjson");
+    expect(lines.map((l) => l.type)).toEqual(["start", "edit", "done"]);
+    expect(insert).toHaveBeenCalledWith(
+      expect.objectContaining({ edit_count: 1 }),
+    );
+    expect(rpc).toHaveBeenCalledWith("finish_rewrite", {
+      reservation: "res-1",
+    });
+  });
+
+  it("streams a failure as an event and gives the request back", async () => {
+    const { client, rpc } = fakeSupabase();
+    createClient.mockResolvedValue(client);
+    streamEdits.mockRejectedValue(new RewriteError("busy", 503));
+    const response = await call({ text: "hello", stream: true });
+    const lines = (await response.text())
+      .trim()
+      .split("\n")
+      .map((l) => JSON.parse(l));
+    await Promise.all(scheduled.splice(0));
+    expect(lines.at(-1)).toEqual({ type: "error", error: "busy" });
+    expect(rpc).toHaveBeenCalledWith("release_quota", { reservation: "res-1" });
+  });
+
+  it("still refuses before streaming starts when the quota is spent", async () => {
+    const { client } = fakeSupabase({ reservation: null });
+    createClient.mockResolvedValue(client);
+    const response = await call({ text: "hello", stream: true });
+    expect(response.status).toBe(429);
+    expect(response.headers.get("content-type")).toContain("json");
+    expect(streamEdits).not.toHaveBeenCalled();
   });
 
   it("tells the user when a rewrite is already running", async () => {

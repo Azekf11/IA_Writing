@@ -82,7 +82,7 @@ export function ThemeControls() {
         <div
           role="dialog"
           aria-label={t("label")}
-          className="absolute right-0 z-20 mt-2 w-64 rounded-xl border border-border bg-surface p-3 shadow-card"
+          className="absolute right-0 z-20 mt-2 w-64 rounded-lg border border-border bg-surface p-3 shadow-card"
         >
           <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted">
             {t("mode")}

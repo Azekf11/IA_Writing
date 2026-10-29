@@ -12,7 +12,7 @@ import http from "node:http";
 export function startMockAnthropic(port) {
   const received = [];
   // Mutable, so the audit can make the stand-in fast for volume tests
-  const state = { delayMs: 400 };
+  const state = { delayMs: 400, gapMs: 350 };
 
   const server = http.createServer((req, res) => {
     if (req.method !== "POST" || !req.url?.startsWith("/v1/messages")) {
@@ -30,6 +30,11 @@ export function startMockAnthropic(port) {
         text,
         hasReferences: content.includes("<style_references>"),
         referenceCount: (content.match(/<reference /g) ?? []).length,
+        intensity: /<intensity>(\w+)<\/intensity>/.exec(content)?.[1] ?? null,
+        voice:
+          /<author_voice>\n([\s\S]*?)\n<\/author_voice>/.exec(content)?.[1] ??
+          null,
+        streamed: body.stream === true,
         system: String(body.system).length,
       });
 
@@ -48,6 +53,12 @@ export function startMockAnthropic(port) {
         return;
       }
 
+      const edits = editsFor(text);
+      if (body.stream === true) {
+        await sendStream(res, body.model, edits, state.gapMs);
+        return;
+      }
+
       res.writeHead(200, { "content-type": "application/json" });
       res.end(
         JSON.stringify({
@@ -57,9 +68,7 @@ export function startMockAnthropic(port) {
           model: body.model,
           stop_reason: "end_turn",
           stop_sequence: null,
-          content: [
-            { type: "text", text: JSON.stringify({ edits: editsFor(text) }) },
-          ],
+          content: [{ type: "text", text: JSON.stringify({ edits }) }],
           usage: { input_tokens: 10, output_tokens: 10 },
         }),
       );
@@ -109,4 +118,55 @@ function editsFor(text) {
     });
   }
   return edits;
+}
+
+// Speaks the real service's event stream: the answer arrives in small pieces, one edit at a time,
+// with a pause between edits like a model that is still writing
+async function sendStream(res, model, edits, gapMs) {
+  const send = (event, data) =>
+    res.write(
+      `event: ${event}\ndata: ${JSON.stringify({ type: event, ...data })}\n\n`,
+    );
+  res.writeHead(200, {
+    "content-type": "text/event-stream",
+    "cache-control": "no-cache",
+  });
+  send("message_start", {
+    message: {
+      id: "msg_mock",
+      type: "message",
+      role: "assistant",
+      model,
+      content: [],
+      stop_reason: null,
+      stop_sequence: null,
+      usage: { input_tokens: 10, output_tokens: 0 },
+    },
+  });
+  send("content_block_start", {
+    index: 0,
+    content_block: { type: "text", text: "" },
+  });
+  const piece = (text) =>
+    send("content_block_delta", {
+      index: 0,
+      delta: { type: "text_delta", text },
+    });
+
+  piece('{"edits":[');
+  for (const [i, edit] of edits.entries()) {
+    const json = JSON.stringify(edit);
+    const middle = Math.floor(json.length / 2);
+    piece((i ? "," : "") + json.slice(0, middle));
+    await new Promise((r) => setTimeout(r, gapMs));
+    piece(json.slice(middle));
+  }
+  piece("]}");
+  send("content_block_stop", { index: 0 });
+  send("message_delta", {
+    delta: { stop_reason: "end_turn", stop_sequence: null },
+    usage: { output_tokens: 10 },
+  });
+  send("message_stop", {});
+  res.end();
 }

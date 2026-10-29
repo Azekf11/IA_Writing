@@ -1,4 +1,3 @@
-import { PenLine } from "lucide-react";
 import { getTranslations } from "next-intl/server";
 import { LanguageSwitcher } from "@/components/language-switcher";
 import { NavLink } from "@/components/nav-link";
@@ -15,11 +14,8 @@ export async function SiteHeader() {
       <div className="flex items-center gap-5">
         <Link
           href="/"
-          className="flex items-center gap-2 text-lg font-semibold tracking-tight"
+          className="font-serif text-xl font-medium tracking-tight"
         >
-          <span className="grid size-8 place-items-center rounded-lg bg-accent text-accent-foreground">
-            <PenLine className="size-4" aria-hidden />
-          </span>
           {tHome("title")}
         </Link>
         <nav className="flex gap-1">

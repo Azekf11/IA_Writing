@@ -20,6 +20,7 @@ const SUITES = [
   "buttons",
   "auth",
   "rewrite",
+  "streaming",
   "limits",
   "concurrency",
   "speed",

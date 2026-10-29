@@ -45,7 +45,7 @@ export function AuthPanel({ email }: { email: string | null }) {
 
   if (email) {
     return (
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-surface px-4 py-2.5 text-sm">
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-surface px-4 py-2.5 text-sm">
         <span className="flex items-center gap-2 text-muted">
           <span className="size-2 rounded-full bg-add" aria-hidden />
           {t("signedInAs", { email })}
@@ -66,7 +66,7 @@ export function AuthPanel({ email }: { email: string | null }) {
     return (
       <p
         role="status"
-        className="flex items-center gap-3 rounded-xl border border-accent/30 bg-accent-soft p-4 text-sm"
+        className="flex items-center gap-3 rounded-lg border border-accent/30 bg-accent-soft p-4 text-sm"
       >
         <Mail className="size-5 shrink-0 text-accent-text" aria-hidden />
         {t("checkEmail")}
@@ -77,7 +77,7 @@ export function AuthPanel({ email }: { email: string | null }) {
   return (
     <form
       onSubmit={signIn}
-      className="flex flex-col gap-2 rounded-xl border border-border bg-surface p-4 shadow-card"
+      className="flex flex-col gap-2 rounded-lg border border-border bg-surface p-4 shadow-card"
     >
       <label htmlFor={id} className="text-sm font-semibold">
         {t("emailLabel")}

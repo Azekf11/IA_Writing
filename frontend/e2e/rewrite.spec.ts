@@ -17,6 +17,22 @@ async function mockRewrite(page: Page, status: number, body: unknown) {
   );
 }
 
+// The same, as the real route sends it: one JSON event per line
+async function mockStream(page: Page, edits: unknown[]) {
+  const events = [
+    { type: "start", references: [] },
+    ...edits.map((edit) => ({ type: "edit", edit })),
+    { type: "done", dropped: 0, ms: { prep: 1, model: 1 } },
+  ];
+  await page.route("**/api/rewrite", (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/x-ndjson",
+      body: events.map((event) => JSON.stringify(event)).join("\n") + "\n",
+    }),
+  );
+}
+
 test.describe("language", () => {
   test("follows the browser language on first visit", async ({ browser }) => {
     const context = await browser.newContext({ locale: "fr-FR" });
@@ -48,14 +64,14 @@ test.describe("rewrite", () => {
   test("reviews and accepts an edit, then shows the final text", async ({
     page,
   }) => {
-    await mockRewrite(page, 200, { edits: [EDIT] });
+    await mockStream(page, [EDIT]);
     await page.goto("/en");
 
     await page.getByLabel("Your text").fill(TEXT);
     await expect(page.getByText("6 words")).toBeVisible();
     await page.getByRole("button", { name: "Rewrite" }).click();
 
-    await expect(page.getByText("Plainer word")).toBeVisible();
+    await expect(page.getByText("Plainer word", { exact: true })).toBeVisible();
     await expect(page.getByTestId("result")).toHaveText(TEXT);
 
     await page.getByRole("button", { name: "Accept", exact: true }).click();
@@ -128,7 +144,7 @@ test.describe("home page", () => {
   }) => {
     await page.goto("/en");
     await expect(page.getByRole("heading", { level: 1 })).toContainText(
-      "Write like a person",
+      "second pair of eyes",
     );
     await expect(page).toHaveTitle(/Rewrity/);
     await expect(page.getByText("Before", { exact: true })).toBeVisible();
@@ -143,7 +159,7 @@ test.describe("home page", () => {
   test("is translated in French", async ({ page }) => {
     await page.goto("/fr");
     await expect(page.getByRole("heading", { level: 1 })).toContainText(
-      "Écrivez comme une personne",
+      "Un second regard",
     );
     await expect(page.getByText("Avant", { exact: true })).toBeVisible();
   });
@@ -184,11 +200,11 @@ test.describe("discovery", () => {
   test("fills the editor with an example, then rewrites with the keyboard", async ({
     page,
   }) => {
-    await mockRewrite(page, 200, { edits: [EDIT] });
+    await mockStream(page, [EDIT]);
     await page.goto("/en");
     await page.getByRole("button", { name: "Try an example" }).click();
     await expect(page.getByLabel("Your text")).not.toBeEmpty();
     await page.getByLabel("Your text").press("Control+Enter");
-    await expect(page.getByText("Plainer word")).toBeVisible();
+    await expect(page.getByText("Plainer word", { exact: true })).toBeVisible();
   });
 });

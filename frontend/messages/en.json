@@ -5,39 +5,14 @@
   },
   "Home": {
     "title": "Rewrity",
-    "tagline": "Paste a text. Get targeted edits that cut stock phrases and filler, guided by real prose from books and journalism. You accept or reject every change.",
-    "headline": "Write like a person, not a template.",
-    "steps": {
-      "one": {
-        "title": "Paste",
-        "body": "Any text up to 5,000 characters, in English or French."
-      },
-      "two": {
-        "title": "Review",
-        "body": "Each suggestion shows what changes and why."
-      },
-      "three": {
-        "title": "Decide",
-        "body": "Accept or reject every edit, then copy the result."
-      }
-    },
-    "eyebrow": "AI-assisted editing, you stay in charge",
-    "demoTitle": "What it does",
+    "tagline": "Paste a text. Rewrity marks stock phrases, filler and stiff constructions and suggests plainer wording. You decide on every change.",
+    "headline": "A second pair of eyes for your writing.",
+    "demoTitle": "An example",
     "demoBefore": "Before",
     "demoAfter": "After",
     "demoOriginal": "In today's fast-paced world, it is crucial to understand that effective communication plays a pivotal role in fostering meaningful connections.",
     "demoRewrite": "Good communication helps people connect.",
     "demoReason": "Drops the stock opener and the inflated wording.",
-    "stats": {
-      "sources": "Reference passages",
-      "languages": "Languages",
-      "control": "Edits you approve"
-    },
-    "statsValue": {
-      "sources": "30k+",
-      "languages": "EN · FR",
-      "control": "100%"
-    },
     "sourcesTitle": "Where the style references come from",
     "sourcesBody": "Public-domain books and essays, historical newspapers, and recent news and magazine articles (up to 2022, before AI-written text flooded the web). Excerpts stay on our server; you only see who they came from."
   },
@@ -51,7 +26,24 @@
     "tooLong": "This text is too long. The limit is {max} characters.",
     "example": "Try an example",
     "exampleText": "In today's fast-paced world, it is crucial to understand that effective communication plays a pivotal role in fostering meaningful connections. Moreover, it is important to note that listening is not just a skill, but a journey. In conclusion, by embracing these principles, we can unlock our full potential.",
-    "shortcut": "Ctrl+Enter to rewrite"
+    "shortcut": "Ctrl+Enter to rewrite",
+    "options": "Options",
+    "strength": "How much to change",
+    "strengths": {
+      "light": "Light",
+      "standard": "Standard",
+      "thorough": "Thorough"
+    },
+    "strengthHint": {
+      "light": "Only the clearest tells.",
+      "standard": "Clear tells, and weaker ones when they pile up.",
+      "thorough": "Weaker tells and flat phrasing too."
+    },
+    "voice": "Your own writing (optional)",
+    "voiceHint": "Paste a few lines you wrote. Edits will stay close to how you write. Not saved.",
+    "voicePlaceholder": "A paragraph from an email, an essay or a post of yours...",
+    "voiceCount": "{count} / {max}",
+    "stop": "Stop"
   },
   "LanguageSwitcher": {
     "label": "Language"
@@ -77,7 +69,18 @@
     "added": "After",
     "emptyReplacement": "(removed)",
     "inspiredBy": "Style references: {authors}",
-    "sourcesTitle": "Guided by"
+    "sourcesTitle": "Guided by",
+    "writing": "Reading your text...",
+    "found": "{count, plural, =0 {Looking for edits...} one {# edit so far} other {# edits so far}}",
+    "stopped": "Stopped. Here is what was found so far.",
+    "cutShort": "The answer was cut short. Here is what arrived.",
+    "filters": "Show",
+    "all": "All",
+    "pending": "To review",
+    "acceptedFilter": "Accepted",
+    "next": "Next",
+    "download": "Download .txt",
+    "shortcuts": "A accept, R reject, J and K move"
   },
   "Errors": {
     "invalid_request": "This text can't be processed. Check its length and try again.",
@@ -101,9 +104,9 @@
     "signIn": "Sign in",
     "emailLabel": "Email",
     "emailPlaceholder": "you@example.com",
-    "sendLink": "Send magic link",
+    "sendLink": "Email me a sign-in link",
     "sending": "Sending...",
-    "checkEmail": "Check your inbox: we sent you a sign-in link.",
+    "checkEmail": "Check your inbox: the sign-in link is on its way.",
     "signOut": "Sign out",
     "signedInAs": "Signed in as {email}",
     "sendFailed": "Could not send the link. Check the address and try again.",
@@ -115,12 +118,18 @@
     "empty": "No rewrites yet.",
     "signInPrompt": "Sign in to see your history.",
     "edits": "{count, plural, one {# edit} other {# edits}}",
-    "details": "Show details",
     "delete": "Delete",
     "unavailable": "History is not configured.",
     "emptyHint": "Your rewrites will show up here once you run one.",
     "deleteFailed": "Could not delete this entry. Try again.",
-    "confirmDelete": "Delete this entry?"
+    "reopen": "Reopen",
+    "search": "Search your history",
+    "noMatch": "Nothing matches \"{query}\".",
+    "clear": "Delete all",
+    "clearConfirm": "Delete all {count} entries? This cannot be undone.",
+    "clearYes": "Yes, delete all",
+    "clearNo": "Cancel",
+    "count": "{count, plural, one {# rewrite} other {# rewrites}}"
   },
   "Footer": {
     "privacy": "Privacy",
