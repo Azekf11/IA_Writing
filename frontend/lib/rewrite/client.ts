@@ -7,6 +7,7 @@ const KNOWN: ClientErrorCode[] = [
   "invalid_request",
   "unauthorized",
   "quota_exceeded",
+  "too_many_requests",
   "not_configured",
   "refused",
   "busy",

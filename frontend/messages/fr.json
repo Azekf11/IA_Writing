@@ -85,7 +85,8 @@
     "server_error": "Un problème est survenu de notre côté. Réessayez.",
     "network": "Erreur réseau. Vérifiez votre connexion et réessayez.",
     "unauthorized": "Connectez-vous pour réécrire votre texte.",
-    "quota_exceeded": "Vous avez atteint la limite du jour. Revenez demain."
+    "quota_exceeded": "Vous avez atteint la limite du jour. Revenez demain.",
+    "too_many_requests": "Une réécriture est déjà en cours. Attendez qu'elle se termine, puis réessayez."
   },
   "Nav": {
     "home": "Réécrire",

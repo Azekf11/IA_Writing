@@ -1,5 +1,5 @@
 import { RewriteError, requestEdits } from "@/lib/rewrite/claude";
-import { DAILY_LIMIT } from "@/lib/rewrite/limits";
+import { DAILY_LIMIT, MAX_IN_FLIGHT } from "@/lib/rewrite/limits";
 import { guardEdits } from "@/lib/rewrite/guard";
 import { locateEdits } from "@/lib/rewrite/locate";
 import { RewriteRequestSchema } from "@/lib/rewrite/schema";
@@ -47,8 +47,10 @@ export async function POST(request: Request) {
   // Reserve the quota first so parallel requests can't bypass the limit
   const { data: reservation, error: quotaError } = await supabase.rpc(
     "reserve_quota",
-    { daily_limit: DAILY_LIMIT },
+    { daily_limit: DAILY_LIMIT, max_in_flight: MAX_IN_FLIGHT },
   );
+  // 53400 is what reserve_quota raises when this user already has too many rewrites running
+  if (quotaError?.code === "53400") return fail("too_many_requests", 429);
   if (quotaError) {
     console.error("Quota check failed", quotaError.code);
     return fail("server_error", 500);
@@ -56,6 +58,7 @@ export async function POST(request: Request) {
   if (!reservation) return fail("quota_exceeded", 429);
 
   const { text, locale } = parsed.data;
+  let succeeded = false;
   try {
     const references = await findReferences(supabase, text, locale);
     const rawEdits = await requestEdits(text, references);
@@ -73,6 +76,7 @@ export async function POST(request: Request) {
     });
     if (saveError) console.error("History save failed", saveError.code);
 
+    succeeded = true;
     const credits = references.map(({ author, title }) => ({ author, title }));
     return Response.json({
       edits,
@@ -84,5 +88,12 @@ export async function POST(request: Request) {
     if (error instanceof RewriteError) return fail(error.code, error.status);
     console.error("Unhandled rewrite error", error);
     return fail("server_error", 500);
+  } finally {
+    // A success frees the in-flight slot but keeps the request spent. If this call fails the
+    // slot frees itself after 90 s, so its error is only logged.
+    if (succeeded) {
+      const { error } = await supabase.rpc("finish_rewrite", { reservation });
+      if (error) console.error("finish_rewrite failed", error.code);
+    }
   }
 }

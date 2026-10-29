@@ -85,7 +85,8 @@
     "server_error": "Something went wrong on our side. Please try again.",
     "network": "Network error. Check your connection and try again.",
     "unauthorized": "Sign in to rewrite your text.",
-    "quota_exceeded": "You've reached today's limit. Come back tomorrow."
+    "quota_exceeded": "You've reached today's limit. Come back tomorrow.",
+    "too_many_requests": "A rewrite is already running. Wait for it to finish, then try again."
   },
   "Nav": {
     "home": "Rewrite",

@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { RewriteError } from "@/lib/rewrite/claude";
-import { DAILY_LIMIT } from "@/lib/rewrite/limits";
+import { DAILY_LIMIT, MAX_IN_FLIGHT } from "@/lib/rewrite/limits";
 import { MAX_CHARS } from "@/lib/text";
 
 const requestEdits = vi.fn();
@@ -39,7 +39,7 @@ function fakeSupabase({
   const rpc = vi.fn(async (name: string) =>
     name === "reserve_quota"
       ? { data: reservation, error: quotaError }
-      : { data: null, error: null },
+      : { data: name === "finish_rewrite" ? true : null, error: null },
   );
   const client = {
     auth: {
@@ -129,6 +129,7 @@ describe("POST /api/rewrite", () => {
     await call({ text: "hello" });
     expect(rpc).toHaveBeenCalledWith("reserve_quota", {
       daily_limit: DAILY_LIMIT,
+      max_in_flight: MAX_IN_FLIGHT,
     });
   });
 
@@ -203,6 +204,56 @@ describe("POST /api/rewrite", () => {
     const response = await call("x".repeat(41_000));
     expect(response.status).toBe(413);
     expect(requestEdits).not.toHaveBeenCalled();
+  });
+
+  it("tells the user when a rewrite is already running", async () => {
+    const { client, rpc } = fakeSupabase({
+      reservation: null,
+      quotaError: { code: "53400" },
+    });
+    createClient.mockResolvedValue(client);
+    const response = await call({ text: "hello" });
+    expect(response.status).toBe(429);
+    expect(await response.json()).toEqual({ error: "too_many_requests" });
+    expect(requestEdits).not.toHaveBeenCalled();
+    // Nothing was reserved, so there is nothing to give back
+    expect(rpc).not.toHaveBeenCalledWith("release_quota", expect.anything());
+  });
+
+  it("frees the in-flight slot after a success without refunding the request", async () => {
+    const { client, rpc } = fakeSupabase();
+    createClient.mockResolvedValue(client);
+    requestEdits.mockResolvedValue([EDIT]);
+    await call({ text: "Hello world" });
+    expect(rpc).toHaveBeenCalledWith("finish_rewrite", {
+      reservation: "res-1",
+    });
+    expect(rpc).not.toHaveBeenCalledWith("release_quota", expect.anything());
+  });
+
+  it("does not turn a success into a refund when finishing fails", async () => {
+    const { client, rpc } = fakeSupabase();
+    rpc.mockImplementation(async (name: string) =>
+      name === "reserve_quota"
+        ? { data: "res-1", error: null }
+        : name === "finish_rewrite"
+          ? { data: null, error: { code: "XX000" } }
+          : { data: null, error: null },
+    );
+    createClient.mockResolvedValue(client);
+    requestEdits.mockResolvedValue([EDIT]);
+    const response = await call({ text: "Hello world" });
+    expect(response.status).toBe(200);
+    expect(rpc).not.toHaveBeenCalledWith("release_quota", expect.anything());
+  });
+
+  it("frees the slot with a refund when Claude fails", async () => {
+    const { client, rpc } = fakeSupabase();
+    createClient.mockResolvedValue(client);
+    requestEdits.mockRejectedValue(new RewriteError("busy", 503));
+    await call({ text: "hello" });
+    expect(rpc).toHaveBeenCalledWith("release_quota", { reservation: "res-1" });
+    expect(rpc).not.toHaveBeenCalledWith("finish_rewrite", expect.anything());
   });
 
   it("still returns the result when saving the history fails", async () => {
