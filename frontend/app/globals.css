@@ -12,6 +12,7 @@
   --muted: #5d6470;
   --border: #d9dce3;
   --accent: #3b6cf6;
+  --accent-text: #315acc;
   --accent-foreground: #ffffff;
   --accent-soft: color-mix(in srgb, var(--accent) 12%, transparent);
   --add: #137a4b;
@@ -34,44 +35,59 @@
   --remove: #ff8a8e;
   --remove-soft: color-mix(in srgb, #ff5a60 16%, transparent);
   --shadow: 0 1px 2px rgb(0 0 0 / 0.4), 0 12px 32px -14px rgb(0 0 0 / 0.7);
+  /* Night default, before an accent is chosen: the same blue the picker offers */
+  --accent: #6c93ff;
+  --accent-text: #6c93ff;
+  --accent-foreground: #0a1026;
   color-scheme: dark;
 }
 
-/* Accent choices: each one is readable on both themes */
+/* Accent choices. --accent fills buttons and marks; --accent-text colours text and small icons.
+   In day mode both are tuned for at least 4.5:1 contrast, which the audit checks (npm run audit). */
 [data-accent="blue"] {
   --accent: #3b6cf6;
+  --accent-text: #315acc;
 }
 [data-accent="violet"] {
   --accent: #7c5cf0;
+  --accent-text: #674cc7;
 }
 [data-accent="emerald"] {
-  --accent: #16a36a;
+  --accent: #128758;
+  --accent-text: #0f724a;
 }
 [data-accent="amber"] {
   --accent: #d98a0b;
   --accent-foreground: #1a1200;
+  --accent-text: #8d5a07;
 }
 [data-accent="rose"] {
-  --accent: #e0457b;
+  --accent: #ce3f71;
+  --accent-text: #ac355f;
 }
 .dark[data-accent="blue"] {
   --accent: #6c93ff;
+  --accent-text: #6c93ff;
   --accent-foreground: #0a1026;
 }
 .dark[data-accent="violet"] {
   --accent: #9b82ff;
+  --accent-text: #9b82ff;
   --accent-foreground: #120a33;
 }
 .dark[data-accent="emerald"] {
   --accent: #3dd598;
+  --accent-text: #3dd598;
   --accent-foreground: #03150d;
 }
 .dark[data-accent="amber"] {
   --accent: #f5b13d;
+  --accent-text: #f5b13d;
   --accent-foreground: #1a1200;
 }
 .dark[data-accent="rose"] {
   --accent: #ff7aa8;
+  --accent-text: #ff7aa8;
   --accent-foreground: #2a0614;
 }
 
@@ -84,6 +100,7 @@
   --color-border: var(--border);
   --color-accent: var(--accent);
   --color-accent-foreground: var(--accent-foreground);
+  --color-accent-text: var(--accent-text);
   --color-accent-soft: var(--accent-soft);
   --color-add: var(--add);
   --color-add-soft: var(--add-soft);

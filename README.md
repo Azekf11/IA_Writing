@@ -13,6 +13,7 @@ Live: <https://rewrity.vercel.app>
 
 1. [What it is, and what it is not](#1-what-it-is-and-what-it-is-not)
 2. [How a rewrite works](#2-how-a-rewrite-works)
+   - [Architecture at a glance](#architecture-at-a-glance)
 3. [How it was designed, step by step](#3-how-it-was-designed-step-by-step)
 4. [The style corpus](#4-the-style-corpus)
 5. [Backend and safety](#5-backend-and-safety)
@@ -76,6 +77,26 @@ Three rules shape the whole product:
 
 If the model fails, the reservation is released so the request is not lost. If the style search
 fails, the rewrite still runs, without excerpts.
+
+### Architecture at a glance
+
+```mermaid
+flowchart LR
+    U([Visitor]) --> W["Web app<br/>Next.js on Vercel"]
+    W -->|"signs in, stores history,<br/>takes quota, searches style"| D[("Supabase<br/>Postgres + Auth + pgvector")]
+    W -->|"text + 3 style excerpts"| M["Language model<br/>(Claude, hosted)"]
+    M -->|"a list of edits"| W
+    C["Corpus builder<br/>Python, run by hand"] -->|"loads passages once"| D
+```
+
+There is no server of our own to run: a web app, a database and one hosted model. The database
+holds the access rules, the daily limit and the style search, in four small functions. The model
+is a dependency, never trusted for facts. The Python side only builds the corpus and never runs in
+production.
+
+The full picture, with the request sequence, the tables, the four database functions, what the
+vector database contains and why, the safety layers, and a table of every decision against the
+alternative left aside, is in **[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)**.
 
 ## 3. How it was designed, step by step
 
@@ -200,17 +221,49 @@ activate, so it is not claimed.
 
 ## 7. Testing
 
-| Layer                                         | Command                          |  Count |
-| --------------------------------------------- | -------------------------------- | -----: |
-| Frontend unit and component tests             | `cd frontend && npm test`        |    123 |
-| Browser tests on the production build         | `cd frontend && npm run e2e`     |     15 |
-| Backend tests                                 | `cd backend && uv run pytest -q` |    283 |
-| Row-level security and quota against Postgres | see section 10                   | script |
+| Layer                                         | Command                          | What it covers                                          |
+| --------------------------------------------- | -------------------------------- | ------------------------------------------------------- |
+| Frontend unit and component tests             | `cd frontend && npm test`        | Prompt, guard, locate, retrieval, route, components     |
+| Browser tests on the production build         | `cd frontend && npm run e2e`     | Main journeys with a canned API                         |
+| Backend tests                                 | `cd backend && uv run pytest -q` | Corpus cleaning, filters, embedder, detector evaluation |
+| Row-level security and quota against Postgres | see section 10                   | Who can read and change what                            |
+| **Site audit**                                | `cd frontend && npm run audit`   | The whole site, driven like a visitor (below)           |
 
 CI (`.github/workflows`) runs lint, format check, type check, tests, build and the browser tests
-for the frontend, and lint, format check and tests for the backend. Browser tests answer the API
-with canned data, so they need no secret. No automated test calls the real model, so the quality
-of the edits is judged by reading them, not by a score.
+for the frontend, and lint, format check and tests for the backend. The browser tests need no
+secret.
+
+### The site audit
+
+`npm run audit` builds the production site, starts it against the local Supabase stack, and
+drives it with a real browser. Only the language model is replaced, by a small local stand-in that
+answers like the real API, so the audit costs nothing and uses no key. Everything else is real:
+the route, the database, the auth service, and the mailbox that receives the magic link.
+
+It checks, in order:
+
+- **Pages**: every page loads in both languages, with the right headers, a translated 404, a
+  sitemap, and no secret in the page.
+- **Accessibility and layout**: automated checks in day and night mode and in all five accent
+  colours, no sideways scrolling on a phone, a tablet or a desktop, and a focus ring on every control.
+- **Every button**: navigation, language switch, the appearance panel (day, night, auto, each
+  accent, kept after a reload), the editor, accept, reject, undo, accept all, copy, delete.
+- **Signing in**: the real magic-link round trip, an invalid link, a refused redirect to another
+  site, sign out, a forged session.
+- **Limits**: bad input, a failing model, a changed number, a made-up quote, the daily limit, two
+  rewrites at once, and one user trying to read or delete another user's history.
+- **Speed**: page load, layout shift, a slow phone, frame times while the review opens, and how
+  long the route itself takes once the model answers instantly.
+
+A written report lands in `frontend/audit/report.md`. The route also sends a `Server-Timing`
+header, so the browser's network panel shows where each rewrite spent its time.
+
+The first run found real problems, all fixed: the accent colours failed contrast checks in day
+mode (text and a few buttons), the text fields hid their focus ring, and a link in the footer was
+too small to tap comfortably. What the audit cannot tell is how good the edits are: the stand-in
+model always gives the same kind of answer, so quality is still judged by reading edits from the
+real model. It also runs on a local database and a fast machine, so its speed figures show the
+site adds little of its own, not what a visitor on the other side of the world will see.
 
 ## 8. The detector research
 
@@ -261,9 +314,10 @@ frontend/            Next.js app (App Router, TypeScript, Tailwind), deployed on
   data/embedder/       the quantised embedding model (29 MB, checksummed)
   messages/            en.json, fr.json (every user-facing string)
   tests/  e2e/         unit, component and browser tests
+  audit/               the site audit: a stand-in model and the checks it runs
 supabase/            migrations (schema, RLS, quota, vector search) and a SQL check script
 backend/             Python: corpus pipeline (aiwd.style) and detector evaluation (aiwd.*)
-docs/                DEPLOY.md, STYLE_CORPUS.md, images, research plan
+docs/                ARCHITECTURE.md, DEPLOY.md, STYLE_CORPUS.md, images, research plan
 .github/workflows/   CI for both sides
 ```
 

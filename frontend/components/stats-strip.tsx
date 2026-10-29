@@ -13,7 +13,7 @@ export function StatsStrip() {
           <dt className="order-2 text-xs text-muted sm:text-sm">
             {t(`stats.${key}`)}
           </dt>
-          <dd className="order-1 text-2xl font-bold tracking-tight text-accent sm:text-3xl">
+          <dd className="order-1 text-2xl font-bold tracking-tight text-accent-text sm:text-3xl">
             {t(`statsValue.${key}`)}
           </dd>
         </div>

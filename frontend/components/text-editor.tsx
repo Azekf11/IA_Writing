@@ -64,7 +64,7 @@ export function TextEditor({
           aria-invalid={tooLong}
           rows={11}
           className={cn(
-            "w-full resize-y rounded-xl border border-border bg-background p-4 leading-relaxed outline-none transition-colors placeholder:text-muted/70 focus:border-accent aria-invalid:border-remove",
+            "w-full resize-y rounded-xl border border-border bg-background p-4 leading-relaxed transition-colors placeholder:text-muted/70 focus:border-accent aria-invalid:border-remove",
             loading && "opacity-60",
           )}
         />

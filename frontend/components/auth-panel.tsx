@@ -68,7 +68,7 @@ export function AuthPanel({ email }: { email: string | null }) {
         role="status"
         className="flex items-center gap-3 rounded-xl border border-accent/30 bg-accent-soft p-4 text-sm"
       >
-        <Mail className="size-5 shrink-0 text-accent" aria-hidden />
+        <Mail className="size-5 shrink-0 text-accent-text" aria-hidden />
         {t("checkEmail")}
       </p>
     );
@@ -91,7 +91,7 @@ export function AuthPanel({ email }: { email: string | null }) {
           onChange={(event) => setValue(event.target.value)}
           placeholder={t("emailPlaceholder")}
           autoComplete="email"
-          className="min-w-0 flex-1 rounded-lg border border-border bg-background px-3 py-2 outline-none transition-colors focus:border-accent"
+          className="min-w-0 flex-1 rounded-lg border border-border bg-background px-3 py-2 transition-colors focus:border-accent"
         />
         <button
           type="submit"

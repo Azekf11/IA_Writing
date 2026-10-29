@@ -11,7 +11,7 @@ export function DemoCard() {
       className="overflow-hidden rounded-2xl border border-border bg-surface shadow-card"
     >
       <div className="flex items-center gap-2 border-b border-border px-5 py-3 text-xs font-semibold uppercase tracking-wide text-muted">
-        <Sparkles className="size-3.5 text-accent" aria-hidden />
+        <Sparkles className="size-3.5 text-accent-text" aria-hidden />
         {t("demoTitle")}
       </div>
 

@@ -266,6 +266,16 @@ describe("POST /api/rewrite", () => {
     await Promise.all(scheduled.splice(0));
   });
 
+  it("reports where the time went in a Server-Timing header", async () => {
+    const { client } = fakeSupabase();
+    createClient.mockResolvedValue(client);
+    requestEdits.mockResolvedValue([]);
+    const response = await call({ text: "hello" });
+    expect(response.headers.get("Server-Timing")).toMatch(
+      /^prep;dur=\d+, model;dur=\d+, total;dur=\d+$/,
+    );
+  });
+
   it("tells the user when a rewrite is already running", async () => {
     const { client, rpc } = fakeSupabase({
       reservation: null,
