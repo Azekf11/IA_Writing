@@ -1,0 +1,155 @@
+{
+  "Metadata": {
+    "title": "Rewrity",
+    "description": "Edit your text so it reads like a person wrote it. You review every change."
+  },
+  "Home": {
+    "title": "Rewrity",
+    "tagline": "Paste a text. Get targeted edits that cut stock phrases and filler, guided by real prose from books and journalism. You accept or reject every change.",
+    "headline": "Write like a person, not a template.",
+    "steps": {
+      "one": {
+        "title": "Paste",
+        "body": "Any text up to 5,000 characters, in English or French."
+      },
+      "two": {
+        "title": "Review",
+        "body": "Each suggestion shows what changes and why."
+      },
+      "three": {
+        "title": "Decide",
+        "body": "Accept or reject every edit, then copy the result."
+      }
+    },
+    "eyebrow": "AI-assisted editing, you stay in charge",
+    "demoTitle": "What it does",
+    "demoBefore": "Before",
+    "demoAfter": "After",
+    "demoOriginal": "In today's fast-paced world, it is crucial to understand that effective communication plays a pivotal role in fostering meaningful connections.",
+    "demoRewrite": "Good communication helps people connect.",
+    "demoReason": "Drops the stock opener and the inflated wording.",
+    "stats": {
+      "sources": "Reference passages",
+      "languages": "Languages",
+      "control": "Edits you approve"
+    },
+    "statsValue": {
+      "sources": "30k+",
+      "languages": "EN · FR",
+      "control": "100%"
+    },
+    "sourcesTitle": "Where the style references come from",
+    "sourcesBody": "Public-domain books and essays, historical newspapers, and recent news and magazine articles (up to 2022, before AI-written text flooded the web). Excerpts stay on our server; you only see who they came from."
+  },
+  "Editor": {
+    "label": "Your text",
+    "placeholder": "Paste or type your text here...",
+    "words": "{count, plural, one {# word} other {# words}}",
+    "characters": "{count} / {max} characters",
+    "rewrite": "Rewrite",
+    "rewriting": "Rewriting...",
+    "tooLong": "This text is too long. The limit is {max} characters.",
+    "example": "Try an example",
+    "exampleText": "In today's fast-paced world, it is crucial to understand that effective communication plays a pivotal role in fostering meaningful connections. Moreover, it is important to note that listening is not just a skill, but a journey. In conclusion, by embracing these principles, we can unlock our full potential.",
+    "shortcut": "Ctrl+Enter to rewrite"
+  },
+  "LanguageSwitcher": {
+    "label": "Language"
+  },
+  "NotFound": {
+    "title": "Page not found",
+    "back": "Back to home"
+  },
+  "Review": {
+    "title": "Suggested edits",
+    "noEdits": "Nothing to change: this text already reads naturally.",
+    "summary": "{accepted} of {total} accepted",
+    "accept": "Accept",
+    "reject": "Reject",
+    "undo": "Undo",
+    "acceptAll": "Accept all",
+    "rejectAll": "Reject all",
+    "result": "Result",
+    "copy": "Copy text",
+    "copied": "Copied",
+    "backToEditor": "Edit the text",
+    "removed": "Before",
+    "added": "After",
+    "emptyReplacement": "(removed)",
+    "inspiredBy": "Style references: {authors}",
+    "sourcesTitle": "Guided by"
+  },
+  "Errors": {
+    "invalid_request": "This text can't be processed. Check its length and try again.",
+    "not_configured": "The rewrite service is not configured yet.",
+    "refused": "The assistant declined to rewrite this text.",
+    "busy": "The service is busy. Please try again in a moment.",
+    "upstream_error": "The assistant could not answer. Please try again.",
+    "server_error": "Something went wrong on our side. Please try again.",
+    "network": "Network error. Check your connection and try again.",
+    "unauthorized": "Sign in to rewrite your text.",
+    "quota_exceeded": "You've reached today's limit. Come back tomorrow.",
+    "too_many_requests": "A rewrite is already running. Wait for it to finish, then try again.",
+    "page": "Something broke while showing this page.",
+    "retry": "Try again"
+  },
+  "Nav": {
+    "home": "Rewrite",
+    "history": "History"
+  },
+  "Auth": {
+    "signIn": "Sign in",
+    "emailLabel": "Email",
+    "emailPlaceholder": "you@example.com",
+    "sendLink": "Send magic link",
+    "sending": "Sending...",
+    "checkEmail": "Check your inbox: we sent you a sign-in link.",
+    "signOut": "Sign out",
+    "signedInAs": "Signed in as {email}",
+    "sendFailed": "Could not send the link. Check the address and try again.",
+    "callbackFailed": "The sign-in link is invalid or expired. Request a new one.",
+    "unavailable": "Sign-in is not configured."
+  },
+  "History": {
+    "title": "History",
+    "empty": "No rewrites yet.",
+    "signInPrompt": "Sign in to see your history.",
+    "edits": "{count, plural, one {# edit} other {# edits}}",
+    "details": "Show details",
+    "delete": "Delete",
+    "unavailable": "History is not configured.",
+    "emptyHint": "Your rewrites will show up here once you run one.",
+    "deleteFailed": "Could not delete this entry. Try again.",
+    "confirmDelete": "Delete this entry?"
+  },
+  "Footer": {
+    "privacy": "Privacy",
+    "notice": "AI suggestions can be wrong. Review every edit before using it."
+  },
+  "Privacy": {
+    "title": "Privacy",
+    "intro": "What this site stores and who sees your text.",
+    "dataTitle": "What we store",
+    "data": "Your email address, and for each rewrite the original text, the suggested edits and the date. Other users cannot read them, and you can delete any entry from the history page.",
+    "aiTitle": "AI processing",
+    "ai": "Your text is sent to Anthropic (Claude) to produce the suggestions. Do not submit text you are not allowed to share.",
+    "limitsTitle": "Limits",
+    "limits": "Suggestions are style edits. They do not change who wrote a text, and this tool does not detect AI-written text.",
+    "back": "Back to home"
+  },
+  "Theme": {
+    "label": "Appearance",
+    "mode": "Mode",
+    "accent": "Accent colour",
+    "light": "Day",
+    "dark": "Night",
+    "system": "Auto",
+    "accents": {
+      "blue": "Blue",
+      "violet": "Violet",
+      "emerald": "Emerald",
+      "amber": "Amber",
+      "rose": "Rose"
+    }
+  }
+}

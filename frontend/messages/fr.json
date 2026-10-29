@@ -1,0 +1,155 @@
+{
+  "Metadata": {
+    "title": "Rewrity",
+    "description": "Corrigez votre texte pour qu'il sonne comme écrit par une personne. Vous validez chaque changement."
+  },
+  "Home": {
+    "title": "Rewrity",
+    "tagline": "Collez un texte. Obtenez des corrections ciblées qui retirent les formules toutes faites et le remplissage, guidées par de la vraie prose de livres et de presse. Vous acceptez ou refusez chaque changement.",
+    "headline": "Écrivez comme une personne, pas comme un modèle.",
+    "steps": {
+      "one": {
+        "title": "Collez",
+        "body": "Un texte jusqu'à 5 000 caractères, en anglais ou en français."
+      },
+      "two": {
+        "title": "Relisez",
+        "body": "Chaque suggestion montre ce qui change et pourquoi."
+      },
+      "three": {
+        "title": "Choisissez",
+        "body": "Acceptez ou refusez chaque modification, puis copiez le résultat."
+      }
+    },
+    "eyebrow": "Édition assistée par IA, vous gardez la main",
+    "demoTitle": "Ce que ça fait",
+    "demoBefore": "Avant",
+    "demoAfter": "Après",
+    "demoOriginal": "Dans un monde en constante évolution, il est crucial de comprendre que la communication efficace joue un rôle essentiel dans la création de liens significatifs.",
+    "demoRewrite": "Bien communiquer aide les gens à se rapprocher.",
+    "demoReason": "Retire l'ouverture toute faite et les mots gonflés.",
+    "stats": {
+      "sources": "Passages de référence",
+      "languages": "Langues",
+      "control": "Modifications validées par vous"
+    },
+    "statsValue": {
+      "sources": "30k+",
+      "languages": "EN · FR",
+      "control": "100%"
+    },
+    "sourcesTitle": "D'où viennent les références de style",
+    "sourcesBody": "Livres et essais du domaine public, journaux anciens, et articles récents de presse et de magazines (jusqu'en 2022, avant que le texte écrit par IA n'inonde le web). Les extraits restent sur notre serveur : vous voyez seulement leur origine."
+  },
+  "Editor": {
+    "label": "Votre texte",
+    "placeholder": "Collez ou saisissez votre texte ici...",
+    "words": "{count, plural, one {# mot} other {# mots}}",
+    "characters": "{count} / {max} caractères",
+    "rewrite": "Réécrire",
+    "rewriting": "Réécriture...",
+    "tooLong": "Ce texte est trop long. La limite est de {max} caractères.",
+    "example": "Essayer un exemple",
+    "exampleText": "Dans un monde en constante évolution, il est crucial de comprendre que la communication efficace joue un rôle essentiel dans la création de liens significatifs. De plus, il est important de noter que l'écoute n'est pas seulement une compétence, mais un voyage. En conclusion, en adoptant ces principes, nous pouvons libérer tout notre potentiel.",
+    "shortcut": "Ctrl+Entrée pour réécrire"
+  },
+  "LanguageSwitcher": {
+    "label": "Langue"
+  },
+  "NotFound": {
+    "title": "Page introuvable",
+    "back": "Retour à l'accueil"
+  },
+  "Review": {
+    "title": "Modifications suggérées",
+    "noEdits": "Rien à changer : ce texte paraît déjà naturel.",
+    "summary": "{accepted} acceptée(s) sur {total}",
+    "accept": "Accepter",
+    "reject": "Refuser",
+    "undo": "Annuler",
+    "acceptAll": "Tout accepter",
+    "rejectAll": "Tout refuser",
+    "result": "Résultat",
+    "copy": "Copier le texte",
+    "copied": "Copié",
+    "backToEditor": "Modifier le texte",
+    "removed": "Avant",
+    "added": "Après",
+    "emptyReplacement": "(supprimé)",
+    "inspiredBy": "Références de style : {authors}",
+    "sourcesTitle": "Guidé par"
+  },
+  "Errors": {
+    "invalid_request": "Ce texte ne peut pas être traité. Vérifiez sa longueur et réessayez.",
+    "not_configured": "Le service de réécriture n'est pas encore configuré.",
+    "refused": "L'assistant a refusé de réécrire ce texte.",
+    "busy": "Le service est occupé. Réessayez dans un instant.",
+    "upstream_error": "L'assistant n'a pas pu répondre. Réessayez.",
+    "server_error": "Un problème est survenu de notre côté. Réessayez.",
+    "network": "Erreur réseau. Vérifiez votre connexion et réessayez.",
+    "unauthorized": "Connectez-vous pour réécrire votre texte.",
+    "quota_exceeded": "Vous avez atteint la limite du jour. Revenez demain.",
+    "too_many_requests": "Une réécriture est déjà en cours. Attendez qu'elle se termine, puis réessayez.",
+    "page": "Un problème est survenu pendant l'affichage de cette page.",
+    "retry": "Réessayer"
+  },
+  "Nav": {
+    "home": "Réécrire",
+    "history": "Historique"
+  },
+  "Auth": {
+    "signIn": "Se connecter",
+    "emailLabel": "E-mail",
+    "emailPlaceholder": "vous@exemple.com",
+    "sendLink": "Envoyer le lien magique",
+    "sending": "Envoi...",
+    "checkEmail": "Vérifiez votre boîte mail : nous vous avons envoyé un lien de connexion.",
+    "signOut": "Se déconnecter",
+    "signedInAs": "Connecté : {email}",
+    "sendFailed": "Impossible d'envoyer le lien. Vérifiez l'adresse et réessayez.",
+    "callbackFailed": "Le lien de connexion est invalide ou expiré. Demandez-en un nouveau.",
+    "unavailable": "La connexion n'est pas configurée."
+  },
+  "History": {
+    "title": "Historique",
+    "empty": "Aucune réécriture pour le moment.",
+    "signInPrompt": "Connectez-vous pour voir votre historique.",
+    "edits": "{count, plural, one {# modification} other {# modifications}}",
+    "details": "Afficher le détail",
+    "delete": "Supprimer",
+    "unavailable": "L'historique n'est pas configuré.",
+    "emptyHint": "Vos réécritures apparaîtront ici dès que vous en lancerez une.",
+    "deleteFailed": "Impossible de supprimer cette entrée. Réessayez.",
+    "confirmDelete": "Supprimer cette entrée ?"
+  },
+  "Footer": {
+    "privacy": "Confidentialité",
+    "notice": "Les suggestions de l'IA peuvent être fausses. Relisez chaque modification avant de l'utiliser."
+  },
+  "Privacy": {
+    "title": "Confidentialité",
+    "intro": "Ce que ce site conserve et qui voit votre texte.",
+    "dataTitle": "Ce que nous conservons",
+    "data": "Votre adresse e-mail et, pour chaque réécriture, le texte original, les modifications suggérées et la date. Les autres utilisateurs ne peuvent pas les lire, et vous pouvez supprimer chaque entrée depuis la page d'historique.",
+    "aiTitle": "Traitement par IA",
+    "ai": "Votre texte est envoyé à Anthropic (Claude) pour produire les suggestions. N'envoyez pas de texte que vous n'avez pas le droit de partager.",
+    "limitsTitle": "Limites",
+    "limits": "Les suggestions sont des corrections de style. Elles ne changent pas l'auteur d'un texte, et cet outil ne détecte pas les textes écrits par une IA.",
+    "back": "Retour à l'accueil"
+  },
+  "Theme": {
+    "label": "Apparence",
+    "mode": "Mode",
+    "accent": "Couleur d'accent",
+    "light": "Jour",
+    "dark": "Nuit",
+    "system": "Auto",
+    "accents": {
+      "blue": "Bleu",
+      "violet": "Violet",
+      "emerald": "Émeraude",
+      "amber": "Ambre",
+      "rose": "Rose"
+    }
+  }
+}

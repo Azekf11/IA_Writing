@@ -1,0 +1,157 @@
+@import "tailwindcss";
+
+/* Theme is a class on <html> (next-themes); accent is a data attribute */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* Day: soft carbon-tinted greys. Night: deep carbon. */
+:root {
+  --background: #f4f5f7;
+  --surface: #ffffff;
+  --surface-2: #eceef2;
+  --foreground: #16181d;
+  --muted: #5d6470;
+  --border: #d9dce3;
+  --accent: #3b6cf6;
+  --accent-foreground: #ffffff;
+  --accent-soft: color-mix(in srgb, var(--accent) 12%, transparent);
+  --add: #137a4b;
+  --add-soft: color-mix(in srgb, #1fa968 14%, transparent);
+  --remove: #b4322f;
+  --remove-soft: color-mix(in srgb, #e5484d 12%, transparent);
+  --shadow:
+    0 1px 2px rgb(16 20 30 / 0.06), 0 8px 24px -12px rgb(16 20 30 / 0.12);
+}
+
+.dark {
+  --background: #0e1013;
+  --surface: #16191e;
+  --surface-2: #1d2128;
+  --foreground: #e8eaee;
+  --muted: #98a0ad;
+  --border: #2a2f38;
+  --add: #4cc38a;
+  --add-soft: color-mix(in srgb, #2fbf7a 16%, transparent);
+  --remove: #ff8a8e;
+  --remove-soft: color-mix(in srgb, #ff5a60 16%, transparent);
+  --shadow: 0 1px 2px rgb(0 0 0 / 0.4), 0 12px 32px -14px rgb(0 0 0 / 0.7);
+  color-scheme: dark;
+}
+
+/* Accent choices: each one is readable on both themes */
+[data-accent="blue"] {
+  --accent: #3b6cf6;
+}
+[data-accent="violet"] {
+  --accent: #7c5cf0;
+}
+[data-accent="emerald"] {
+  --accent: #16a36a;
+}
+[data-accent="amber"] {
+  --accent: #d98a0b;
+  --accent-foreground: #1a1200;
+}
+[data-accent="rose"] {
+  --accent: #e0457b;
+}
+.dark[data-accent="blue"] {
+  --accent: #6c93ff;
+  --accent-foreground: #0a1026;
+}
+.dark[data-accent="violet"] {
+  --accent: #9b82ff;
+  --accent-foreground: #120a33;
+}
+.dark[data-accent="emerald"] {
+  --accent: #3dd598;
+  --accent-foreground: #03150d;
+}
+.dark[data-accent="amber"] {
+  --accent: #f5b13d;
+  --accent-foreground: #1a1200;
+}
+.dark[data-accent="rose"] {
+  --accent: #ff7aa8;
+  --accent-foreground: #2a0614;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-foreground: var(--foreground);
+  --color-muted: var(--muted);
+  --color-border: var(--border);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent-soft: var(--accent-soft);
+  --color-add: var(--add);
+  --color-add-soft: var(--add-soft);
+  --color-remove: var(--remove);
+  --color-remove-soft: var(--remove-soft);
+  --shadow-card: var(--shadow);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans), system-ui, sans-serif;
+}
+
+/* Soft glow behind the page, tinted by the accent */
+body::before {
+  content: "";
+  position: fixed;
+  inset: -20% -10% auto -10%;
+  height: 60vh;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(40rem 20rem at 20% 0%, var(--accent-soft), transparent 70%),
+    radial-gradient(
+      32rem 18rem at 85% 10%,
+      color-mix(in srgb, var(--accent) 8%, transparent),
+      transparent 70%
+    );
+}
+
+::selection {
+  background: color-mix(in srgb, var(--accent) 30%, transparent);
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* Shimmer for the loading state */
+@keyframes shimmer {
+  from {
+    background-position: 200% 0;
+  }
+  to {
+    background-position: -200% 0;
+  }
+}
+
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--surface-2) 25%,
+    var(--border) 50%,
+    var(--surface-2) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.6s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton {
+    animation: none;
+  }
+  * {
+    scroll-behavior: auto !important;
+  }
+}
