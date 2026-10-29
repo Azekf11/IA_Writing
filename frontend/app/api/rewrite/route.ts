@@ -46,6 +46,7 @@ export async function POST(request: Request) {
   if (!userId) return fail("unauthorized", 401);
 
   const { text, locale } = parsed.data;
+  const started = performance.now();
 
   // The two lookups do not depend on each other, so they share one round trip
   const [quota, references] = await Promise.all([
@@ -64,8 +65,11 @@ export async function POST(request: Request) {
   }
   if (!reservation) return fail("quota_exceeded", 429);
 
+  const prepared = performance.now();
+
   try {
     const rawEdits = await requestEdits(text, references);
+    const modelled = performance.now();
     const { kept, dropped } = guardEdits(rawEdits);
     const edits = locateEdits(text, kept);
     if (Object.keys(dropped).length > 0) console.info("Edits dropped", dropped);
@@ -89,10 +93,16 @@ export async function POST(request: Request) {
     });
 
     const credits = references.map(({ author, title }) => ({ author, title }));
-    return Response.json({
-      edits,
-      references: credits,
-    } satisfies RewriteResponse);
+    // Visible in the browser's network panel: where the time went
+    const timing = [
+      `prep;dur=${Math.round(prepared - started)}`,
+      `model;dur=${Math.round(modelled - prepared)}`,
+      `total;dur=${Math.round(performance.now() - started)}`,
+    ].join(", ");
+    return Response.json(
+      { edits, references: credits } satisfies RewriteResponse,
+      { headers: { "Server-Timing": timing } },
+    );
   } catch (error) {
     // The user got nothing, so give the request back with the ticket only we hold
     after(async () => {

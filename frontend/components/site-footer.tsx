@@ -9,7 +9,7 @@ export async function SiteFooter() {
       <p>{t("notice")}</p>
       <Link
         href="/privacy"
-        className="underline-offset-4 hover:text-foreground hover:underline"
+        className="-my-2 py-2 underline-offset-4 hover:text-foreground hover:underline"
       >
         {t("privacy")}
       </Link>

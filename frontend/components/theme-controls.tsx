@@ -22,9 +22,9 @@ const THEMES = [
 const SWATCH: Record<Accent, string> = {
   blue: "bg-[#3b6cf6]",
   violet: "bg-[#7c5cf0]",
-  emerald: "bg-[#16a36a]",
+  emerald: "bg-[#128758]",
   amber: "bg-[#d98a0b]",
-  rose: "bg-[#e0457b]",
+  rose: "bg-[#ce3f71]",
 };
 
 // The server cannot know the theme, so UI that depends on it waits for the client

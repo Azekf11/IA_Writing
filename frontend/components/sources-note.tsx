@@ -7,7 +7,7 @@ export function SourcesNote() {
 
   return (
     <aside className="flex gap-4 rounded-2xl border border-border bg-surface-2 p-5">
-      <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-accent-soft text-accent">
+      <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-accent-soft text-accent-text">
         <Library className="size-5" aria-hidden />
       </span>
       <div>

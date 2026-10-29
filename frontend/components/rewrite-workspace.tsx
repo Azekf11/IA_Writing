@@ -102,7 +102,7 @@ export function RewriteWorkspace() {
     >
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h2 className="flex items-center gap-2 text-xl font-semibold">
-          <Sparkles className="size-5 text-accent" aria-hidden />
+          <Sparkles className="size-5 text-accent-text" aria-hidden />
           {t("title")}
         </h2>
         <button

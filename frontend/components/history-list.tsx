@@ -36,7 +36,7 @@ export function HistoryList({ items }: { items: HistoryItem[] }) {
   if (rows.length === 0) {
     return (
       <div className="flex flex-col items-center gap-2 rounded-2xl border border-dashed border-border bg-surface px-6 py-14 text-center">
-        <span className="grid size-12 place-items-center rounded-xl bg-accent-soft text-accent">
+        <span className="grid size-12 place-items-center rounded-xl bg-accent-soft text-accent-text">
           <Inbox className="size-6" aria-hidden />
         </span>
         <p className="font-semibold">{t("empty")}</p>
@@ -72,7 +72,7 @@ export function HistoryList({ items }: { items: HistoryItem[] }) {
                   timeStyle: "short",
                 })}
                 <span aria-hidden>·</span>
-                <span className="rounded-full bg-accent-soft px-2 py-0.5 font-medium text-accent">
+                <span className="rounded-full bg-accent-soft px-2 py-0.5 font-medium text-accent-text">
                   {t("edits", { count: row.editCount })}
                 </span>
               </span>
