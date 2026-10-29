@@ -85,9 +85,15 @@ Step 4 is safe to repeat: rows are upserted by id.
 
 ## Known limits
 
+- The corpus holds 45,527 passages (online, 161 MB of the 500 MB free limit):
+  Gutenberg 4,920, Common Corpus 24,607, recent news 16,000 (9,000 en, 7,000 fr).
 - The search always returns the nearest passages, however far they are. A text
-  about business gets loosely related excerpts (similarity around 0.25). There is
-  no minimum score yet.
+  about business gets loosely related excerpts (similarity around 0.35), and code
+  or gibberish still scores 0.2 to 0.33. Measured, so no threshold separates
+  related from unrelated; `MIN_SIMILARITY` (0.2) only drops the weakest matches.
+- Recent French web text covers crawls from 2013 to 2022, and English news is a
+  single 2019 crawl. Neither is guaranteed human-written: the 2022 cut-off lowers
+  the risk, it does not remove it.
 - Measured on the corpus itself (not on rewrite quality): 96% of neighbours are
   in the same language, 80% are the same kind (fiction or essay), and 19% come
   from the same book against 0.8% by chance.

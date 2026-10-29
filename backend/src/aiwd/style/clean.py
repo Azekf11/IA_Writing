@@ -48,7 +48,7 @@ def is_prose(paragraph: str) -> bool:
     upper = sum(ch.isupper() for ch in paragraph)
     if upper / max(letters, 1) > 0.12:
         return False
-    if paragraph[-1] not in ".!?…\"”»’":
+    if paragraph[-1] not in '.!?…"”»’':
         return False
     # Lines that are mostly short quoted exchanges read as dialogue, not as style samples
     quotes = sum(paragraph.count(q) for q in ('"', "“", "«", "—"))

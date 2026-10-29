@@ -19,8 +19,13 @@ TOKENIZER = {
     "truncation": None,
     "padding": None,
     "added_tokens": [],
-    "normalizer": {"type": "BertNormalizer", "clean_text": True, "handle_chinese_chars": True,
-                   "strip_accents": None, "lowercase": True},  # fmt: skip
+    "normalizer": {
+        "type": "BertNormalizer",
+        "clean_text": True,
+        "handle_chinese_chars": True,
+        "strip_accents": None,
+        "lowercase": True,
+    },  # fmt: skip
     "pre_tokenizer": {"type": "BertPreTokenizer"},
     "post_processor": None,
     "decoder": None,

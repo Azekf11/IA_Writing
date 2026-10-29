@@ -15,6 +15,11 @@ export type Reference = {
 // How many excerpts reach the prompt, and how many candidates we fetch to pick them from
 const KEEP = 3;
 const CANDIDATES = 10;
+// A floor, not a topic filter. Measured with this embedder: prose on a clear topic scores
+// 0.45 to 0.55, corporate jargon about 0.35, and code or gibberish anywhere from 0.2 to 0.33,
+// so no threshold separates "related" from "unrelated". This only drops the weakest matches.
+// Style references guide rhythm, not subject, so a loose match is still usable.
+export const MIN_SIMILARITY = 0.2;
 
 const asVector = (values: number[]) =>
   `[${values.map((v) => v.toFixed(6)).join(",")}]`;
@@ -57,7 +62,10 @@ export async function findReferences(
       console.error("Style search failed", error.code);
       return [];
     }
-    return onePerAuthor((data ?? []) as Reference[]);
+    const related = ((data ?? []) as Reference[]).filter(
+      (row) => row.similarity >= MIN_SIMILARITY,
+    );
+    return onePerAuthor(related);
   } catch (error) {
     console.error("Style references unavailable", error);
     return [];

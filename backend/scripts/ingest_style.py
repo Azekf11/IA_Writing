@@ -24,7 +24,7 @@ BACKEND = ROOT / "backend"
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    names = ("passages.jsonl", "passages_cc.jsonl")
+    names = ("passages.jsonl", "passages_cc.jsonl", "passages_web.jsonl")
     default = [str(BACKEND / "data/style" / name) for name in names]
     parser.add_argument("--passages", nargs="+", default=default)
     parser.add_argument("--embedder", default=str(ROOT / "frontend/data/embedder"))

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { findReferences } from "@/lib/style/retrieve";
+import { findReferences, MIN_SIMILARITY } from "@/lib/style/retrieve";
 
 const FRENCH =
   "Il regardait la pluie tomber sur la ville et il pensait à sa mère dans la maison.";
@@ -37,6 +37,27 @@ afterEach(() => {
 });
 
 describe("findReferences", () => {
+  it("drops excerpts that match too weakly", async () => {
+    const { client } = fakeSupabase({
+      data: [
+        row("Weak", { similarity: MIN_SIMILARITY - 0.01 }),
+        row("Edge", { similarity: MIN_SIMILARITY }),
+        row("Strong", { similarity: 0.6 }),
+      ],
+    });
+    const found = await findReferences(client, ENGLISH, "en", () => embedder);
+    expect(found.map((r) => r.author)).toEqual(["Edge", "Strong"]);
+  });
+
+  it("returns no reference at all when every match is too weak", async () => {
+    const { client } = fakeSupabase({
+      data: [row("A", { similarity: 0.05 }), row("B", { similarity: 0.1 })],
+    });
+    expect(await findReferences(client, ENGLISH, "en", () => embedder)).toEqual(
+      [],
+    );
+  });
+
   it("searches in the language of the text, not of the interface", async () => {
     const { client, rpc } = fakeSupabase({ data: [] });
     await findReferences(client, FRENCH, "en", () => embedder);

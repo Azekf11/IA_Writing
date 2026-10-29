@@ -46,6 +46,8 @@ Do these once, in this order. Keys go in dashboards, never in git.
 - A rewrite returns edits; accepting one changes the result text.
 - The history page lists the rewrite, and delete removes it.
 - After `DAILY_LIMIT` rewrites (see `frontend/lib/rewrite/limits.ts`) the next one shows the quota message.
+- A user can have at most `MAX_IN_FLIGHT` rewrites running at once; more get a "already running" message.
+- Quota is taken with `reserve_quota()` and given back only with the reservation id (`release_quota()`), so a user cannot refund themselves by calling the API directly.
 
 ## Costs and safety
 
