@@ -5,6 +5,7 @@ import { useTranslations } from "next-intl";
 import { useId } from "react";
 import { cn } from "@/lib/cn";
 import { countWords, MAX_CHARS } from "@/lib/text";
+import { RewriteOptions, type Options } from "@/components/rewrite-options";
 
 export type EditorStatus = "idle" | "loading";
 
@@ -17,6 +18,9 @@ type Props = {
   error?: string | null;
   // Offered while the editor is empty: fills it with a sample text
   onExample?: () => void;
+  // Intensity and the author's own writing; shown only when the page handles them
+  options?: Options;
+  onOptionsChange?: (value: Options) => void;
 };
 
 export function TextEditor({
@@ -26,6 +30,8 @@ export function TextEditor({
   status = "idle",
   error = null,
   onExample,
+  options,
+  onOptionsChange,
 }: Props) {
   const t = useTranslations("Editor");
   const id = useId();
@@ -38,7 +44,7 @@ export function TextEditor({
 
   return (
     <form
-      className="flex flex-col gap-4 rounded-2xl border border-border bg-surface p-5 shadow-card"
+      className="flex flex-col gap-4 rounded-xl border border-border bg-surface p-5 shadow-card"
       onSubmit={(event) => {
         event.preventDefault();
         if (canSubmit) onSubmit?.();
@@ -64,7 +70,7 @@ export function TextEditor({
           aria-invalid={tooLong}
           rows={11}
           className={cn(
-            "w-full resize-y rounded-xl border border-border bg-background p-4 leading-relaxed transition-colors placeholder:text-muted/70 focus:border-accent aria-invalid:border-remove",
+            "w-full resize-y rounded-lg border border-border bg-background p-4 leading-relaxed transition-colors placeholder:text-muted/70 focus:border-accent aria-invalid:border-remove",
             loading && "opacity-60",
           )}
         />
@@ -88,6 +94,14 @@ export function TextEditor({
           </div>
         )}
       </div>
+
+      {options && onOptionsChange && (
+        <RewriteOptions
+          value={options}
+          onChange={onOptionsChange}
+          disabled={loading}
+        />
+      )}
 
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div
@@ -123,7 +137,7 @@ export function TextEditor({
           <button
             type="submit"
             disabled={!canSubmit}
-            className="group inline-flex items-center gap-2 rounded-xl bg-accent px-5 py-2.5 font-semibold text-accent-foreground shadow-sm transition-all hover:brightness-110 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40 disabled:shadow-none disabled:hover:brightness-100"
+            className="group inline-flex items-center gap-2 rounded-lg bg-accent px-5 py-2.5 font-semibold text-accent-foreground shadow-sm transition-all hover:brightness-110 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40 disabled:shadow-none disabled:hover:brightness-100"
           >
             {loading ? (
               <>

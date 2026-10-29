@@ -1,10 +1,12 @@
 import { after } from "next/server";
 import { RewriteError, requestEdits } from "@/lib/rewrite/claude";
+import { streamResponse } from "@/lib/rewrite/stream-response";
 import { DAILY_LIMIT, MAX_IN_FLIGHT } from "@/lib/rewrite/limits";
 import { guardEdits } from "@/lib/rewrite/guard";
 import { locateEdits } from "@/lib/rewrite/locate";
 import { RewriteRequestSchema } from "@/lib/rewrite/schema";
 import type {
+  Edit,
   ErrorCode,
   ErrorResponse,
   RewriteResponse,
@@ -45,7 +47,8 @@ export async function POST(request: Request) {
   const userId = data?.claims.sub;
   if (!userId) return fail("unauthorized", 401);
 
-  const { text, locale } = parsed.data;
+  const { text, locale, strength, voice, stream } = parsed.data;
+  const options = { strength, voice };
   const started = performance.now();
 
   // The two lookups do not depend on each other, so they share one round trip
@@ -67,30 +70,48 @@ export async function POST(request: Request) {
 
   const prepared = performance.now();
 
+  // History and slot release run once the answer is out, whichever way it was sent
+  const record = async (edits: Edit[]) => {
+    const [saved, finished] = await Promise.all([
+      supabase.from("rewrites").insert({
+        user_id: userId,
+        original: text,
+        edits,
+        edit_count: edits.length,
+        locale,
+      }),
+      supabase.rpc("finish_rewrite", { reservation }),
+    ]);
+    if (saved.error) console.error("History save failed", saved.error.code);
+    if (finished.error)
+      console.error("finish_rewrite failed", finished.error.code);
+  };
+  const giveBack = async () => {
+    await supabase.rpc("release_quota", { reservation });
+  };
+
+  if (stream) {
+    const { response, settled } = streamResponse({
+      text,
+      references,
+      options,
+      signal: request.signal,
+      prepMs: prepared - started,
+      onSuccess: record,
+      onFailure: giveBack,
+    });
+    after(() => settled);
+    return response;
+  }
+
   try {
-    const rawEdits = await requestEdits(text, references);
+    const rawEdits = await requestEdits(text, references, undefined, options);
     const modelled = performance.now();
     const { kept, dropped } = guardEdits(rawEdits);
     const edits = locateEdits(text, kept);
     if (Object.keys(dropped).length > 0) console.info("Edits dropped", dropped);
 
-    // Bookkeeping runs after the response is sent: the user does not wait for it.
-    // History is a bonus, and a slot that is not freed here frees itself after 90 s.
-    after(async () => {
-      const [saved, finished] = await Promise.all([
-        supabase.from("rewrites").insert({
-          user_id: userId,
-          original: text,
-          edits,
-          edit_count: edits.length,
-          locale,
-        }),
-        supabase.rpc("finish_rewrite", { reservation }),
-      ]);
-      if (saved.error) console.error("History save failed", saved.error.code);
-      if (finished.error)
-        console.error("finish_rewrite failed", finished.error.code);
-    });
+    after(() => record(edits));
 
     const credits = references.map(({ author, title }) => ({ author, title }));
     // Visible in the browser's network panel: where the time went
@@ -105,9 +126,7 @@ export async function POST(request: Request) {
     );
   } catch (error) {
     // The user got nothing, so give the request back with the ticket only we hold
-    after(async () => {
-      await supabase.rpc("release_quota", { reservation });
-    });
+    after(giveBack);
     if (error instanceof RewriteError) return fail(error.code, error.status);
     console.error("Unhandled rewrite error", error);
     return fail("server_error", 500);

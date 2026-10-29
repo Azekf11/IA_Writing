@@ -19,8 +19,7 @@
   --add-soft: color-mix(in srgb, #1fa968 14%, transparent);
   --remove: #b4322f;
   --remove-soft: color-mix(in srgb, #e5484d 12%, transparent);
-  --shadow:
-    0 1px 2px rgb(16 20 30 / 0.06), 0 8px 24px -12px rgb(16 20 30 / 0.12);
+  --shadow: 0 1px 0 rgb(16 20 30 / 0.04);
 }
 
 .dark {
@@ -34,7 +33,7 @@
   --add-soft: color-mix(in srgb, #2fbf7a 16%, transparent);
   --remove: #ff8a8e;
   --remove-soft: color-mix(in srgb, #ff5a60 16%, transparent);
-  --shadow: 0 1px 2px rgb(0 0 0 / 0.4), 0 12px 32px -14px rgb(0 0 0 / 0.7);
+  --shadow: 0 1px 0 rgb(0 0 0 / 0.3);
   /* Night default, before an accent is chosen: the same blue the picker offers */
   --accent: #6c93ff;
   --accent-text: #6c93ff;
@@ -109,29 +108,13 @@
   --shadow-card: var(--shadow);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+  --font-serif: var(--font-serif-display);
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
   font-family: var(--font-sans), system-ui, sans-serif;
-}
-
-/* Soft glow behind the page, tinted by the accent */
-body::before {
-  content: "";
-  position: fixed;
-  inset: -20% -10% auto -10%;
-  height: 60vh;
-  z-index: -1;
-  pointer-events: none;
-  background:
-    radial-gradient(40rem 20rem at 20% 0%, var(--accent-soft), transparent 70%),
-    radial-gradient(
-      32rem 18rem at 85% 10%,
-      color-mix(in srgb, var(--accent) 8%, transparent),
-      transparent 70%
-    );
 }
 
 ::selection {

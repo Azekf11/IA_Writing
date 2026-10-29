@@ -63,7 +63,7 @@ export async function run(t) {
         await page.goto(`${t.base}/fr`, { waitUntil: "networkidle" });
         await page.getByLabel("E-mail").fill(visitor.email);
         await page
-          .getByRole("button", { name: "Envoyer le lien magique" })
+          .getByRole("button", { name: "Recevoir un lien de connexion" })
           .click();
         await page.getByText("Vérifiez votre boîte").waitFor({ timeout: 5000 });
         const link = await magicLinkFor(visitor.email);

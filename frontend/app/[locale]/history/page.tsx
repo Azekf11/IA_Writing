@@ -29,13 +29,14 @@ async function HistoryContent() {
   // RLS limits this query to the signed-in user's rows
   const { data: rows } = await supabase
     .from("rewrites")
-    .select("id, original, edit_count, created_at")
+    .select("id, original, edits, edit_count, created_at")
     .order("created_at", { ascending: false })
     .limit(50);
 
   const items = (rows ?? []).map((row) => ({
     id: row.id,
     original: row.original,
+    edits: Array.isArray(row.edits) ? row.edits : [],
     editCount: row.edit_count,
     createdAt: row.created_at,
   }));
@@ -64,7 +65,9 @@ export default async function HistoryPage({
   return (
     <main className="mx-auto flex w-full max-w-4xl flex-col gap-8 px-6 py-8">
       <SiteHeader />
-      <h1 className="text-3xl font-bold tracking-tight">{t("title")}</h1>
+      <h1 className="font-serif text-3xl font-medium tracking-tight">
+        {t("title")}
+      </h1>
       <Suspense>
         <HistoryContent />
       </Suspense>

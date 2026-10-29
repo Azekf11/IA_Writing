@@ -31,7 +31,9 @@ export default async function PrivacyPage({
     <main className="mx-auto flex w-full max-w-4xl flex-col gap-8 px-6 py-8">
       <SiteHeader />
       <div className="flex flex-col gap-2">
-        <h1 className="text-3xl font-bold tracking-tight">{t("title")}</h1>
+        <h1 className="font-serif text-3xl font-medium tracking-tight">
+          {t("title")}
+        </h1>
         <p className="text-muted">{t("intro")}</p>
       </div>
       {SECTIONS.map((section) => (
