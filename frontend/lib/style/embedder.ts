@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { Tokenizer } from "@huggingface/tokenizers";
 
-// Same files and same maths as backend/src/aiwd/style/embed.py:
+// Same files and same maths as corpus-pipeline/src/aiwd/style/embed.py:
 // tokenize, average the int8 rows (times their scale), L2-normalize.
 const DIR = path.join(process.cwd(), "data", "embedder");
 
@@ -72,7 +72,8 @@ export function createEmbedder(): Embedder {
 
 let cached: Embedder | undefined;
 
-// Loaded once per server instance: reading 27 MB on every request would be wasteful
+// Loaded once per server instance, at its first rewrite: reading 27 MB on every request would be
+// wasteful
 export function getEmbedder(): Embedder {
   cached ??= createEmbedder();
   return cached;

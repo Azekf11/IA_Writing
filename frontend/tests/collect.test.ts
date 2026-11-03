@@ -50,6 +50,29 @@ describe("EditCollector", () => {
     expect(collector.result()).toHaveLength(1);
   });
 
+  it("gives each of two identical quotes its own occurrence, and drops a third", () => {
+    const collector = new EditCollector("crucial, truly crucial");
+    const first = collector.add(raw("crucial", "key"));
+    const second = collector.add(raw("crucial", "vital"));
+    expect([first?.start, second?.start]).toEqual([0, 15]);
+    expect(collector.add(raw("crucial", "central"))).toBeNull();
+    expect(collector.dropped).toEqual({ not_found: 1 });
+  });
+
+  it("finds a quote retyped with plain typography, and keeps the exact text", () => {
+    const collector = new EditCollector(
+      "Il dit \u00ab\u00a0oui\u00a0\u00bb, c\u2019est tout.",
+    );
+    const edit = collector.add(raw("c'est tout", "voil\u00e0"));
+    expect(edit?.original).toBe("c\u2019est tout");
+  });
+
+  it("counts a number changed in a repeated quote", () => {
+    const collector = new EditCollector("12% et 12%");
+    expect(collector.add(raw("12%", "15%"))).toBeNull();
+    expect(collector.dropped).toEqual({ numbers_changed: 1 });
+  });
+
   it("does not spend an id on a dropped edit", () => {
     const collector = new EditCollector(TEXT);
     collector.add(raw("nothing here", "x"));

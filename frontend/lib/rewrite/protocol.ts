@@ -4,7 +4,13 @@ import type { Edit, ErrorCode, ReferenceCredit } from "./types";
 export type StreamEvent =
   | { type: "start"; references: ReferenceCredit[] }
   | { type: "edit"; edit: Edit }
-  | { type: "done"; dropped: number; ms: { prep: number; model: number } }
+  | {
+      type: "done";
+      dropped: number;
+      ms: { prep: number; model: number };
+      // The model did not finish: these are only the edits that arrived before it stopped
+      partial?: true;
+    }
   | { type: "error"; error: ErrorCode };
 
 export const STREAM_TYPE = "application/x-ndjson";

@@ -3,6 +3,7 @@
 import { Check, RotateCcw, X } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { cn } from "@/lib/cn";
+import { firstClick } from "@/lib/first-click";
 import { toSegments, type Decision } from "@/lib/rewrite/apply";
 import type { Edit } from "@/lib/rewrite/types";
 
@@ -51,7 +52,7 @@ export function DiffView({
               "my-2 block scroll-mt-24 rounded-lg border bg-surface p-4 transition-colors",
               edit.id === activeId && "ring-2 ring-accent",
               accepted && "border-add/50",
-              rejected && "border-border opacity-70",
+              rejected && "border-border",
               decision === "pending" && "border-border shadow-card",
             )}
           >
@@ -75,7 +76,9 @@ export function DiffView({
                   rejected && "bg-transparent text-muted line-through",
                 )}
               >
-                {edit.replacement || t("emptyReplacement")}
+                {edit.replacement.trim()
+                  ? edit.replacement
+                  : t("emptyReplacement")}
               </span>
             </span>
             <span className="mt-2 block text-xs text-muted">{edit.reason}</span>
@@ -84,7 +87,7 @@ export function DiffView({
                 <>
                   <button
                     type="button"
-                    onClick={() => onDecide(edit.id, "accepted")}
+                    onClick={firstClick(() => onDecide(edit.id, "accepted"))}
                     className="inline-flex items-center gap-1.5 rounded-lg bg-accent px-3 py-1.5 text-xs font-semibold text-accent-foreground transition-all hover:brightness-110 active:scale-95"
                   >
                     <Check className="size-3.5" aria-hidden />
@@ -102,7 +105,7 @@ export function DiffView({
               ) : (
                 <button
                   type="button"
-                  onClick={() => onDecide(edit.id, "pending")}
+                  onClick={firstClick(() => onDecide(edit.id, "pending"))}
                   className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-xs font-semibold transition-colors hover:bg-surface-2"
                 >
                   <RotateCcw className="size-3.5" aria-hidden />

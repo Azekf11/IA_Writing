@@ -10,8 +10,11 @@ import { ResultPanel } from "@/components/result-panel";
 import { ReviewBar } from "@/components/review-bar";
 import { TextEditor } from "@/components/text-editor";
 import { useRewrite } from "@/components/use-rewrite";
+import { useRouter } from "@/i18n/navigation";
+import { firstClick } from "@/lib/first-click";
 import { applyEdits, type Decision } from "@/lib/rewrite/apply";
-import { takeReopen } from "@/lib/rewrite/reopen";
+import { readDraft, saveDraft } from "@/lib/rewrite/draft";
+import { clearReopen, readReopen } from "@/lib/rewrite/reopen";
 import {
   isTyping,
   moveFocus,
@@ -27,19 +30,40 @@ export function RewriteWorkspace() {
   const tErrors = useTranslations("Errors");
   const tEditor = useTranslations("Editor");
   const locale = useLocale();
-  // Coming from the history page: that rewrite is shown again, edits included.
-  // Read once, as the component is first created.
+  const router = useRouter();
+  // Coming from the history page: that rewrite is shown again, edits included. Read as the
+  // component is first created, and removed only once React has kept that render.
   const [reopened] = useState(() =>
-    typeof window === "undefined" ? null : takeReopen(),
+    typeof window === "undefined" ? null : readReopen(),
   );
+  useEffect(clearReopen, []);
   const rewrite = useRewrite(reopened?.edits);
   const { view, edits, credits } = rewrite;
 
-  const [text, setText] = useState(reopened?.text ?? "");
-  const [options, setOptions] = useState<Options>(DEFAULT_OPTIONS);
+  const [text, setText] = useState(
+    () => reopened?.text ?? readDraft()?.text ?? "",
+  );
+  const [options, setOptions] = useState<Options>(
+    () => readDraft()?.options ?? DEFAULT_OPTIONS,
+  );
+  // A reopened text is not what the reader typed: the draft keeps their own text for when they come
+  // back, and the options they set either way
+  const [draftBefore] = useState(readDraft);
+  useEffect(() => {
+    saveDraft({
+      text: text === reopened?.text ? (draftBefore?.text ?? "") : text,
+      options,
+    });
+  }, [text, options, reopened, draftBefore]);
   const [decisions, setDecisions] = useState<Record<string, Decision>>({});
   const [activeId, setActiveId] = useState<string | null>(null);
   const reviewRef = useRef<HTMLElement>(null);
+
+  // The session ended elsewhere: the account panel has to follow. The text stays.
+  const signedOut = rewrite.errorCode === "unauthorized";
+  useEffect(() => {
+    if (signedOut) router.refresh();
+  }, [signedOut, router]);
 
   // The review opens below the page header: bring it into view, unless motion is reduced.
   // Only when it first opens, not on every edit that arrives.
@@ -92,8 +116,12 @@ export function RewriteWorkspace() {
   function submit() {
     setDecisions({});
     setActiveId(null);
+    // One form for accented letters: pasted text can carry an accent as a separate character, and
+    // the edits' offsets will be read against what is sent here
+    const clean = text.normalize("NFC");
+    setText(clean);
     rewrite.start({
-      text,
+      text: clean,
       locale,
       strength: options.strength,
       voice: options.voice,
@@ -139,7 +167,7 @@ export function RewriteWorkspace() {
         ) : (
           <button
             type="button"
-            onClick={rewrite.backToEditor}
+            onClick={firstClick(rewrite.backToEditor)}
             className={quiet}
           >
             <ArrowLeft className="size-4" aria-hidden />
@@ -158,6 +186,12 @@ export function RewriteWorkspace() {
       {rewrite.stopped && (
         <p role="status" className="text-sm text-muted">
           {t("stopped")}
+        </p>
+      )}
+
+      {rewrite.cutShort && (
+        <p role="status" className="text-sm text-muted">
+          {t("cutShort")}
         </p>
       )}
 

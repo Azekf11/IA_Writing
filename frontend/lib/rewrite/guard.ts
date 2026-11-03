@@ -1,3 +1,5 @@
+import { plainTypography } from "./locate";
+import { sameNumbers } from "./numbers";
 import type { RawEdit } from "./schema";
 
 // Most edits one answer may carry: a longer list is noise, and costs the user a long review
@@ -15,14 +17,9 @@ export type DropReason =
   | "too_many";
 
 const MARKUP = /<\/?[a-z][^>]*>|\]\(|^\s*#{1,6}\s/i;
-// 1,200 | 3.5 | 2019 | 5 000: the digits that carry facts
-const NUMBER = /\d+(?:[.,\u00a0 ]\d{3})*(?:[.,]\d+)?/g;
-
-const digitsOf = (value: string) =>
-  (value.match(NUMBER) ?? []).map((n) => n.replace(/[\s\u00a0.,]/g, "")).sort();
 
 const squash = (value: string) =>
-  value.replace(/\s+/g, " ").trim().toLowerCase();
+  plainTypography(value).replace(/\s+/g, " ").trim().toLowerCase();
 
 export function whyDrop(edit: RawEdit): DropReason | null {
   if (squash(edit.original) === squash(edit.replacement)) return "unchanged";
@@ -33,12 +30,9 @@ export function whyDrop(edit: RawEdit): DropReason | null {
     return "too_long";
   }
   if (MARKUP.test(edit.replacement)) return "markup";
-  // Rewording must not touch the facts: same numbers in, same numbers out
-  const before = digitsOf(edit.original);
-  const after = digitsOf(edit.replacement);
-  if (before.length !== after.length || before.some((n, i) => n !== after[i])) {
-    return "numbers_changed";
-  }
+  // Rewording must not touch the numbers: the same ones in, the same ones out, in any order.
+  // This catches changed figures only; it cannot see a change of meaning around them.
+  if (!sameNumbers(edit.original, edit.replacement)) return "numbers_changed";
   return null;
 }
 

@@ -5,7 +5,8 @@ import type { Edit } from "./types";
 
 // Applies the same rules as guardEdits + locateEdits, one edit at a time, so an edit can reach
 // the user the moment the model finishes writing it. Ids follow arrival order and never change:
-// a decision made while the model is still writing stays attached to the right edit.
+// a decision made while the model is still writing stays attached to the right edit. The cap
+// counts located edits only, where guardEdits also counts quotes that locateEdits drops later.
 export class EditCollector {
   private taken: [number, number][] = [];
   private kept: Edit[] = [];

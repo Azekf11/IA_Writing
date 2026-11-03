@@ -11,7 +11,7 @@ export async function SiteHeader() {
 
   return (
     <header className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3">
-      <div className="flex items-center gap-5">
+      <div className="flex flex-wrap items-center gap-x-5 gap-y-1">
         <Link
           href="/"
           className="font-serif text-xl font-medium tracking-tight"

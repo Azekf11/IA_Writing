@@ -14,7 +14,7 @@
     "demoRewrite": "Good communication helps people connect.",
     "demoReason": "Drops the stock opener and the inflated wording.",
     "sourcesTitle": "Where the style references come from",
-    "sourcesBody": "Public-domain books and essays, historical newspapers, and recent news and magazine articles (up to 2022, before AI-written text flooded the web). Excerpts stay on our server; you only see who they came from."
+    "sourcesBody": "Public-domain books and essays, historical newspapers, and recent news and magazine articles (up to 2022, before AI-written text became common online). Up to three excerpts are sent to Anthropic with your text to guide the edits; your browser only receives their source."
   },
   "Editor": {
     "label": "Your text",
@@ -26,7 +26,6 @@
     "tooLong": "This text is too long. The limit is {max} characters.",
     "example": "Try an example",
     "exampleText": "In today's fast-paced world, it is crucial to understand that effective communication plays a pivotal role in fostering meaningful connections. Moreover, it is important to note that listening is not just a skill, but a journey. In conclusion, by embracing these principles, we can unlock our full potential.",
-    "shortcut": "Ctrl+Enter to rewrite",
     "options": "Options",
     "strength": "How much to change",
     "strengths": {
@@ -40,7 +39,7 @@
       "thorough": "Weaker tells and flat phrasing too."
     },
     "voice": "Your own writing (optional)",
-    "voiceHint": "Paste a few lines you wrote. Edits will stay close to how you write. Not saved.",
+    "voiceHint": "Paste a few lines you wrote. Edits will stay close to how you write. Sent with this request, not saved.",
     "voicePlaceholder": "A paragraph from an email, an essay or a post of yours...",
     "voiceCount": "{count} / {max}",
     "stop": "Stop"
@@ -69,29 +68,23 @@
     "added": "After",
     "emptyReplacement": "(removed)",
     "inspiredBy": "Style references: {authors}",
-    "sourcesTitle": "Guided by",
-    "writing": "Reading your text...",
     "found": "{count, plural, =0 {Looking for edits...} one {# edit so far} other {# edits so far}}",
     "stopped": "Stopped. Here is what was found so far.",
     "cutShort": "The answer was cut short. Here is what arrived.",
-    "filters": "Show",
-    "all": "All",
-    "pending": "To review",
-    "acceptedFilter": "Accepted",
-    "next": "Next",
     "download": "Download .txt",
     "shortcuts": "A accept, R reject, J and K move"
   },
   "Errors": {
     "invalid_request": "This text can't be processed. Check its length and try again.",
     "not_configured": "The rewrite service is not configured yet.",
-    "refused": "The assistant declined to rewrite this text.",
-    "busy": "The service is busy. Please try again in a moment.",
-    "upstream_error": "The assistant could not answer. Please try again.",
+    "refused": "The assistant declined to rewrite this text. Declined attempts count toward today's limit.",
+    "busy": "The service is busy. Please try again in a moment. Failed attempts count toward today's limit.",
+    "upstream_error": "The assistant could not answer. Please try again. Failed attempts count toward today's limit.",
     "server_error": "Something went wrong on our side. Please try again.",
     "network": "Network error. Check your connection and try again.",
     "unauthorized": "Sign in to rewrite your text.",
     "quota_exceeded": "You've reached today's limit. Come back tomorrow.",
+    "global_quota_exceeded": "Rewrity has reached its overall usage limit for now. Try again later.",
     "too_many_requests": "A rewrite is already running. Wait for it to finish, then try again.",
     "page": "Something broke while showing this page.",
     "retry": "Try again"
@@ -101,17 +94,15 @@
     "history": "History"
   },
   "Auth": {
-    "signIn": "Sign in",
     "emailLabel": "Email",
     "emailPlaceholder": "you@example.com",
     "sendLink": "Email me a sign-in link",
     "sending": "Sending...",
-    "checkEmail": "Check your inbox: the sign-in link is on its way.",
+    "checkEmail": "Check your inbox: the sign-in link is on its way. Open it in this browser.",
     "signOut": "Sign out",
     "signedInAs": "Signed in as {email}",
-    "sendFailed": "Could not send the link. Check the address and try again.",
-    "callbackFailed": "The sign-in link is invalid or expired. Request a new one.",
-    "unavailable": "Sign-in is not configured."
+    "sendFailed": "Could not send the link. Check the address, or try again in a few minutes.",
+    "callbackFailed": "This sign-in link did not work. It works once, soon after it is sent, and in the browser that asked for it. Request a new one here."
   },
   "History": {
     "title": "History",
@@ -120,16 +111,18 @@
     "edits": "{count, plural, one {# edit} other {# edits}}",
     "delete": "Delete",
     "unavailable": "History is not configured.",
+    "loadFailed": "Could not load your history. Reload the page to try again.",
     "emptyHint": "Your rewrites will show up here once you run one.",
     "deleteFailed": "Could not delete this entry. Try again.",
     "reopen": "Reopen",
     "search": "Search your history",
     "noMatch": "Nothing matches \"{query}\".",
     "clear": "Delete all",
-    "clearConfirm": "Delete all {count} entries? This cannot be undone.",
+    "clearConfirm": "{count, plural, one {Delete this entry?} other {Delete all # entries?}} This cannot be undone.",
     "clearYes": "Yes, delete all",
     "clearNo": "Cancel",
-    "count": "{count, plural, one {# rewrite} other {# rewrites}}"
+    "count": "{count, plural, one {# rewrite} other {# rewrites}}",
+    "olderHidden": "Only your {count} most recent rewrites are listed and searched."
   },
   "Footer": {
     "privacy": "Privacy",
@@ -139,12 +132,13 @@
     "title": "Privacy",
     "intro": "What this site stores and who sees your text.",
     "dataTitle": "What we store",
-    "data": "Your email address, and for each rewrite the original text, the suggested edits and the date. Other users cannot read them, and you can delete any entry from the history page.",
+    "data": "Your email address; for each rewrite, the original text, the suggested edits, the language and the date; and the number of attempts you make each day. To apply the limits, a record of each attempt is also kept for at least two days, then removed when a later attempt, from any account, passes the limits. Your writing sample is not stored. History entries stay until you delete them from the history page, which lists your 50 most recent. Your email and daily counts stay until your account is deleted, which only the site's owner can do for now. Your browser keeps your session cookies and your language and appearance choices.",
+    "accessTitle": "Who can read it",
+    "access": "Other users cannot read any of this. The site's owner can: your text is stored as written, not encrypted against them. The site runs on Vercel and the data is stored with Supabase, whose sign-in service can also record your IP address and browser.",
     "aiTitle": "AI processing",
-    "ai": "Your text is sent to Anthropic (Claude) to produce the suggestions. Do not submit text you are not allowed to share.",
+    "ai": "Your text is sent to Anthropic (Claude) to produce the suggestions, with your writing sample if you add one and up to three excerpts from the style corpus. Anthropic handles this data under its own terms. Do not submit text you are not allowed to share.",
     "limitsTitle": "Limits",
-    "limits": "Suggestions are style edits. They do not change who wrote a text, and this tool does not detect AI-written text.",
-    "back": "Back to home"
+    "limits": "Suggestions are style edits. They do not change who wrote a text, and this tool does not detect AI-written text."
   },
   "Theme": {
     "label": "Appearance",

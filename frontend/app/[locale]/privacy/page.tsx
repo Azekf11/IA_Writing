@@ -5,8 +5,9 @@ import { notFound } from "next/navigation";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
 import { routing } from "@/i18n/routing";
+import { alternatesFor } from "@/lib/site";
 
-const SECTIONS = ["data", "ai", "limits"] as const;
+const SECTIONS = ["data", "access", "ai", "limits"] as const;
 
 export async function generateMetadata({
   params,
@@ -15,7 +16,7 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const { locale } = await params;
   const t = await getTranslations({ locale, namespace: "Privacy" });
-  return { title: t("title") };
+  return { title: t("title"), alternates: alternatesFor(locale, "/privacy") };
 }
 
 export default async function PrivacyPage({

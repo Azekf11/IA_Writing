@@ -1,10 +1,12 @@
+// @vitest-environment node
 import Anthropic from "@anthropic-ai/sdk";
 import { describe, expect, it, vi } from "vitest";
 import { requestEdits, RewriteError, streamEdits } from "@/lib/rewrite/claude";
+import { sse } from "./anthropic-sse";
 
 // Minimal stand-in for the SDK client
-function fakeClient(parse: ReturnType<typeof vi.fn>) {
-  return { messages: { parse } } as unknown as Pick<Anthropic, "messages">;
+function fakeClient(create: ReturnType<typeof vi.fn>) {
+  return { messages: { create } } as unknown as Pick<Anthropic, "messages">;
 }
 
 // Headers are required, otherwise the SDK builds a connection error
@@ -13,7 +15,7 @@ const apiError = (status: number) =>
 
 const ok = (edits: unknown[]) => ({
   stop_reason: "end_turn",
-  parsed_output: { edits },
+  content: [{ type: "text", text: JSON.stringify({ edits }) }],
 });
 
 async function codeOf(promise: Promise<unknown>) {
@@ -28,67 +30,158 @@ async function codeOf(promise: Promise<unknown>) {
 describe("requestEdits", () => {
   it("returns the parsed edits", async () => {
     const edits = [{ original: "a", replacement: "b", reason: "c" }];
-    const parse = vi.fn().mockResolvedValue(ok(edits));
-    await expect(requestEdits("a", [], fakeClient(parse))).resolves.toEqual(
+    const create = vi.fn().mockResolvedValue(ok(edits));
+    await expect(requestEdits("a", [], fakeClient(create))).resolves.toEqual(
       edits,
     );
   });
 
   it("wraps the text in tags and asks for structured output", async () => {
-    const parse = vi.fn().mockResolvedValue(ok([]));
-    await requestEdits("hello", [], fakeClient(parse));
-    const params = parse.mock.calls[0][0];
+    const create = vi.fn().mockResolvedValue(ok([]));
+    await requestEdits("hello", [], fakeClient(create));
+    const params = create.mock.calls[0][0];
     expect(params.messages[0].content).toBe("<text>\nhello\n</text>");
     expect(params.output_config.format).toBeDefined();
   });
 
+  // The README's bound on what one attempt can cost
+  it("caps the length of an answer", async () => {
+    const create = vi.fn().mockResolvedValue(ok([]));
+    await requestEdits("hello", [], fakeClient(create));
+    expect(create.mock.calls[0][0].max_tokens).toBe(8_000);
+  });
+
   it("maps a refusal to the refused code", async () => {
-    const parse = vi.fn().mockResolvedValue({ stop_reason: "refusal" });
-    expect(await codeOf(requestEdits("a", [], fakeClient(parse)))).toBe(
+    const create = vi
+      .fn()
+      .mockResolvedValue({ stop_reason: "refusal", content: [] });
+    expect(await codeOf(requestEdits("a", [], fakeClient(create)))).toBe(
       "refused",
     );
   });
 
-  it("treats unparsable output as an upstream error", async () => {
-    const parse = vi
-      .fn()
-      .mockResolvedValue({ stop_reason: "max_tokens", parsed_output: null });
-    const code = await codeOf(requestEdits("a", [], fakeClient(parse)));
-    expect(code).toBe("upstream_error");
+  it("treats cut-off or malformed output as an upstream error", async () => {
+    for (const text of ['{"edits":[{"orig', '{"edits":[{"original":"a"}]}']) {
+      const create = vi.fn().mockResolvedValue({
+        stop_reason: "max_tokens",
+        content: [{ type: "text", text }],
+      });
+      expect(await codeOf(requestEdits("a", [], fakeClient(create)))).toBe(
+        "upstream_error",
+      );
+    }
   });
 
   it("maps rate limits and overload to busy", async () => {
     for (const status of [429, 529]) {
       const error = apiError(status);
-      const parse = vi.fn().mockRejectedValue(error);
-      expect(await codeOf(requestEdits("a", [], fakeClient(parse)))).toBe(
+      const create = vi.fn().mockRejectedValue(error);
+      expect(await codeOf(requestEdits("a", [], fakeClient(create)))).toBe(
         "busy",
       );
     }
   });
 
-  it("maps a rejected key to a server error, not a user error", async () => {
-    vi.spyOn(console, "error").mockImplementation(() => {});
-    const error = apiError(401);
-    const parse = vi.fn().mockRejectedValue(error);
-    const code = await codeOf(requestEdits("a", [], fakeClient(parse)));
-    expect(code).toBe("server_error");
+  // The model was called, so the message must be the one that says the attempt counted
+  it("maps a rejected key to upstream_error, and says why in the logs", async () => {
+    const logged = vi.spyOn(console, "error").mockImplementation(() => {});
+    for (const status of [401, 403]) {
+      const create = vi.fn().mockRejectedValue(apiError(status));
+      expect(await codeOf(requestEdits("a", [], fakeClient(create)))).toBe(
+        "upstream_error",
+      );
+    }
+    expect(logged).toHaveBeenCalledWith("Anthropic credentials rejected");
   });
 
   it("maps other API failures to upstream_error", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {});
     const error = apiError(400);
-    const parse = vi.fn().mockRejectedValue(error);
-    const code = await codeOf(requestEdits("a", [], fakeClient(parse)));
+    const create = vi.fn().mockRejectedValue(error);
+    const code = await codeOf(requestEdits("a", [], fakeClient(create)));
     expect(code).toBe("upstream_error");
+  });
+
+  // An API error's message can quote the request, and so the text
+  it("logs the status of an API failure, never its message", async () => {
+    const logged = vi.spyOn(console, "error").mockImplementation(() => {});
+    const create = vi.fn().mockRejectedValue(apiError(400));
+    await codeOf(requestEdits("a", [], fakeClient(create)));
+    expect(logged.mock.calls).toEqual([["Anthropic API error", 400]]);
+  });
+
+  it("maps a lost connection and a timeout to upstream_error", async () => {
+    const logged = vi.spyOn(console, "error").mockImplementation(() => {});
+    for (const error of [
+      new Anthropic.APIConnectionError({ message: "socket hang up" }),
+      new Anthropic.APIConnectionTimeoutError(),
+    ]) {
+      const create = vi.fn().mockRejectedValue(error);
+      expect(await codeOf(requestEdits("a", [], fakeClient(create)))).toBe(
+        "upstream_error",
+      );
+    }
+    // The class is logged, not the message
+    expect(logged.mock.calls.flat().map(String).join(" ")).not.toContain(
+      "socket hang up",
+    );
+  });
+
+  it("stays quiet when the reader cancelled the call", async () => {
+    const logged = vi.spyOn(console, "error").mockImplementation(() => {});
+    const create = vi.fn().mockRejectedValue(new Anthropic.APIUserAbortError());
+    expect(await codeOf(requestEdits("a", [], fakeClient(create)))).toBe(
+      "upstream_error",
+    );
+    expect(logged).not.toHaveBeenCalled();
+  });
+
+  it("maps anything else to upstream_error, and logs its kind only", async () => {
+    const logged = vi.spyOn(console, "error").mockImplementation(() => {});
+    const create = vi
+      .fn()
+      .mockRejectedValue(
+        new SyntaxError('Unexpected token in "my secret text"'),
+      );
+    expect(await codeOf(requestEdits("a", [], fakeClient(create)))).toBe(
+      "upstream_error",
+    );
+    expect(logged).toHaveBeenCalledWith(
+      "Unexpected rewrite failure",
+      "SyntaxError",
+    );
+    expect(logged.mock.calls.flat().map(String).join(" ")).not.toContain(
+      "secret",
+    );
+  });
+
+  it("gives the call a deadline and no retries", async () => {
+    const create = vi.fn().mockResolvedValue(ok([]));
+    await requestEdits("a", [], fakeClient(create));
+    expect(create.mock.calls[0][1]).toMatchObject({
+      timeout: 50_000,
+      maxRetries: 0,
+      signal: expect.any(AbortSignal),
+    });
+  });
+
+  it("counts what the request already used against the deadline", async () => {
+    const timeout = vi.spyOn(AbortSignal, "timeout");
+    const create = vi.fn().mockResolvedValue(ok([]));
+    await requestEdits("a", [], fakeClient(create), {}, 20_000);
+    expect(timeout).toHaveBeenLastCalledWith(30_000);
+    await requestEdits("a", [], fakeClient(create), {}, 70_000);
+    expect(timeout).toHaveBeenLastCalledWith(0);
+    timeout.mockRestore();
   });
 });
 
 // A stand-in for client.messages.stream: emits the answer in pieces, then resolves the final message
-function fakeStream(
-  pieces: string[],
-  final: Record<string, unknown> = { stop_reason: "end_turn" },
-) {
+function fakeStream(pieces: string[], stopReason = "end_turn") {
+  const final = {
+    stop_reason: stopReason,
+    content: [{ type: "text", text: pieces.join("") }],
+  };
   const handlers: Record<string, (value: string) => void> = {};
   const stream = {
     on: (event: string, handler: (value: string) => void) => {
@@ -134,31 +227,78 @@ describe("streamEdits", () => {
     expect(all).toHaveLength(2);
   });
 
-  it("passes the abort signal on to the request", async () => {
+  it("passes the abort signal on to the request, with a deadline and no retries", async () => {
     const { client, options } = fakeStream([answer]);
     const controller = new AbortController();
     await streamEdits("a d", [], () => {}, {}, client, controller.signal);
-    expect(options[0]).toMatchObject({ signal: controller.signal });
+    const sent = options[0] as { signal: AbortSignal };
+    expect(sent).toMatchObject({ timeout: 50_000, maxRetries: 0 });
+    expect(sent.signal.aborted).toBe(false);
+    controller.abort();
+    expect(sent.signal.aborted).toBe(true);
   });
 
-  it("keeps the edits that arrived before the answer was cut off", async () => {
+  it("works without a signal from the caller", async () => {
+    const { client, options } = fakeStream([answer]);
+    await streamEdits("a d", [], () => {}, {}, client);
+    expect((options[0] as { signal: AbortSignal }).signal.aborted).toBe(false);
+  });
+
+  it("hands over the edits written before a cut, and says the answer is not complete", async () => {
     const cut = answer.slice(0, answer.indexOf('"d"') - 2);
-    const { client } = fakeStream([cut], { stop_reason: "max_tokens" });
-    const all = await streamEdits("a d", [], () => {}, {}, client);
-    expect(all).toHaveLength(1);
+    const { client } = fakeStream([cut], "max_tokens");
+    const seen: string[] = [];
+    expect(
+      await codeOf(
+        streamEdits("a d", [], (e) => seen.push(e.original), {}, client),
+      ),
+    ).toBe("upstream_error");
+    expect(seen).toEqual(["a"]);
+  });
+
+  it("says so even when the cut-off answer happens to read as a whole", async () => {
+    const { client } = fakeStream([answer], "max_tokens");
+    expect(await codeOf(streamEdits("a d", [], () => {}, {}, client))).toBe(
+      "upstream_error",
+    );
   });
 
   it("fails when the answer was cut off before any edit", async () => {
-    const { client } = fakeStream(['{"edits":[{"orig'], {
-      stop_reason: "max_tokens",
-    });
+    const { client } = fakeStream(['{"edits":[{"orig'], "max_tokens");
     expect(await codeOf(streamEdits("a", [], () => {}, {}, client))).toBe(
       "upstream_error",
     );
   });
 
+  it("treats a complete, empty list as nothing to change", async () => {
+    const { client } = fakeStream(['{"edits":[]}']);
+    await expect(streamEdits("a", [], () => {}, {}, client)).resolves.toEqual(
+      [],
+    );
+  });
+
+  it("fails when the answer holds no usable edit, instead of saying nothing needs changing", async () => {
+    for (const pieces of [
+      [],
+      ["I cannot answer in JSON."],
+      ['{"edits":[{"original":"a"}]}'],
+      // These close every brace they open, and still are not the answer that was asked for
+      ["{}"],
+      ["[]"],
+      ['{"edits":null}'],
+      ['{"edits":"none"}'],
+      ['{"error":"nope"}'],
+      ["Sorry {see below}"],
+    ]) {
+      const { client } = fakeStream(pieces);
+      expect(await codeOf(streamEdits("a", [], () => {}, {}, client))).toBe(
+        "upstream_error",
+      );
+    }
+  });
+
   it("maps a refusal to the refused code", async () => {
-    const { client } = fakeStream([], { stop_reason: "refusal" });
+    const { client } = fakeStream([], "refusal");
     expect(await codeOf(streamEdits("a", [], () => {}, {}, client))).toBe(
       "refused",
     );
@@ -177,6 +317,177 @@ describe("streamEdits", () => {
     } as unknown as Pick<Anthropic, "messages">;
     expect(await codeOf(streamEdits("a", [], () => {}, {}, client))).toBe(
       "busy",
+    );
+  });
+});
+
+// The real SDK over a canned HTTP answer, with no network: how it parses a stream and which
+// errors it raises are part of what these tests check. Stand-in clients cannot show that.
+function realClient(body: BodyInit, contentType = "text/event-stream") {
+  const requests: Record<string, unknown>[] = [];
+  const client = new Anthropic({
+    apiKey: "test",
+    maxRetries: 0,
+    fetch: async (_url, init) => {
+      requests.push(JSON.parse(String(init?.body)));
+      return new Response(body, {
+        status: 200,
+        headers: { "content-type": contentType },
+      });
+    },
+  });
+  return { client, requests };
+}
+
+const firstEdit = answer.slice(0, answer.indexOf('"d"') - 2);
+
+describe("streamEdits, through the real SDK", () => {
+  const run = (body: BodyInit) =>
+    streamEdits("a d", [], () => {}, {}, realClient(body).client);
+
+  it("still asks for structured output", async () => {
+    const { client, requests } = realClient(sse([answer], "end_turn"));
+    await streamEdits("a d", [], () => {}, {}, client);
+    expect(requests[0]).toMatchObject({
+      stream: true,
+      output_config: {
+        effort: "medium",
+        format: { type: "json_schema", schema: { type: "object" } },
+      },
+    });
+  });
+
+  it("returns the edits of a complete answer", async () => {
+    expect(await run(sse([answer], "end_turn"))).toHaveLength(2);
+  });
+
+  it("hands over the edit that was complete when the tokens ran out, then fails", async () => {
+    const seen: string[] = [];
+    const { client } = realClient(sse([firstEdit], "max_tokens"));
+    expect(
+      await codeOf(
+        streamEdits("a d", [], (e) => seen.push(e.original), {}, client),
+      ),
+    ).toBe("upstream_error");
+    expect(seen).toEqual(["a"]);
+  });
+
+  it("fails when the tokens ran out before any edit", async () => {
+    expect(await codeOf(run(sse(['{"edits":[{"orig'], "max_tokens")))).toBe(
+      "upstream_error",
+    );
+  });
+
+  it("reports a refusal, with or without text before it", async () => {
+    expect(await codeOf(run(sse([], "refusal")))).toBe("refused");
+    expect(await codeOf(run(sse([firstEdit], "refusal")))).toBe("refused");
+  });
+
+  it("fails on an answer that is not the expected JSON", async () => {
+    expect(await codeOf(run(sse(["Sorry, no."], "end_turn")))).toBe(
+      "upstream_error",
+    );
+  });
+
+  // Delivers `before`, then fails on the next read, as a connection that dies does
+  const dyingAfter = (before: string) => {
+    const encoder = new TextEncoder();
+    let sent = false;
+    return new ReadableStream<Uint8Array>({
+      pull(controller) {
+        if (sent) {
+          return controller.error(new Error("hang up in my secret text"));
+        }
+        sent = true;
+        controller.enqueue(encoder.encode(before));
+      },
+    });
+  };
+
+  it("maps a connection that dies to upstream_error, and logs no text from the answer", async () => {
+    const logged = vi.spyOn(console, "error").mockImplementation(() => {});
+    const whole = sse([firstEdit], "end_turn");
+    for (const [before, edits] of [
+      // Before the first edit, then after it
+      [whole.slice(0, whole.indexOf("content_block_delta")), 0],
+      [whole.slice(0, whole.indexOf("content_block_stop")), 1],
+    ] as const) {
+      const seen: string[] = [];
+      const { client } = realClient(dyingAfter(before));
+      expect(
+        await codeOf(
+          streamEdits("a d", [], (e) => seen.push(e.original), {}, client),
+        ),
+      ).toBe("upstream_error");
+      expect(seen).toHaveLength(edits);
+    }
+    expect(logged.mock.calls.flat().map(String).join(" ")).not.toContain(
+      "secret",
+    );
+  });
+
+  it.each(["overloaded_error", "rate_limit_error"])(
+    "maps a %s event inside the stream to busy",
+    async (type) => {
+      const body = `event: error\ndata: ${JSON.stringify({
+        type: "error",
+        error: { type, message: "x" },
+      })}\n\n`;
+      expect(await codeOf(run(body))).toBe("busy");
+    },
+  );
+
+  it("maps another error event inside the stream to upstream_error", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const body = `event: error\ndata: ${JSON.stringify({
+      type: "error",
+      error: { type: "api_error", message: "x" },
+    })}\n\n`;
+    expect(await codeOf(run(body))).toBe("upstream_error");
+  });
+
+  it("recognises a cancelled call without logging it", async () => {
+    const logged = vi.spyOn(console, "error").mockImplementation(() => {});
+    logged.mockClear();
+    const controller = new AbortController();
+    controller.abort();
+    const { client, requests } = realClient(sse([answer], "end_turn"));
+    await expect(
+      streamEdits("a d", [], () => {}, {}, client, controller.signal),
+    ).rejects.toBeInstanceOf(RewriteError);
+    expect(logged).not.toHaveBeenCalled();
+    // The service is never reached, so nothing is paid for
+    expect(requests).toHaveLength(0);
+  });
+});
+
+describe("requestEdits, through the real SDK", () => {
+  const message = (text: string | null, stopReason: string) =>
+    JSON.stringify({
+      id: "m",
+      type: "message",
+      role: "assistant",
+      model: "x",
+      content: text === null ? [] : [{ type: "text", text }],
+      stop_reason: stopReason,
+      stop_sequence: null,
+      usage: { input_tokens: 1, output_tokens: 1 },
+    });
+  const run = (body: string) =>
+    requestEdits("a d", [], realClient(body, "application/json").client);
+
+  it("returns the edits of a complete answer", async () => {
+    expect(await run(message(answer, "end_turn"))).toHaveLength(2);
+  });
+
+  it("reports a refusal, with or without text", async () => {
+    expect(await codeOf(run(message(null, "refusal")))).toBe("refused");
+    expect(await codeOf(run(message(firstEdit, "refusal")))).toBe("refused");
+  });
+
+  it("fails on a cut-off answer instead of crashing", async () => {
+    expect(await codeOf(run(message(firstEdit, "max_tokens")))).toBe(
+      "upstream_error",
     );
   });
 });

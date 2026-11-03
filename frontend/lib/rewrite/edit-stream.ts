@@ -10,8 +10,6 @@ export class EditStreamParser {
   private inString = false;
   private escaped = false;
   private current = "";
-  // Pieces that did not parse as an edit: counted, never fatal
-  skipped = 0;
 
   push(chunk: string): RawEdit[] {
     const found: RawEdit[] = [];
@@ -41,16 +39,15 @@ export class EditStreamParser {
     return found;
   }
 
+  // A piece that does not parse as an edit is skipped, never fatal
   private finish(): RawEdit | null {
     const source = this.current;
     this.current = "";
     try {
       const parsed = RawEditSchema.safeParse(JSON.parse(source));
-      if (parsed.success) return parsed.data;
+      return parsed.success ? parsed.data : null;
     } catch {
-      // Falls through: a broken piece is skipped
+      return null;
     }
-    this.skipped++;
-    return null;
   }
 }

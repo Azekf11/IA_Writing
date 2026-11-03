@@ -107,6 +107,68 @@ describe("fetchEdits", () => {
     ]);
   });
 
+  it("reports when the server says the answer stopped short", async () => {
+    stub(
+      streamOf(
+        wire([
+          { type: "start", references: [] },
+          { type: "edit", edit: edit(0) },
+          { ...done, partial: true } as StreamEvent,
+        ]),
+      ),
+    );
+    expect((await fetchEdits(input)).partial).toBe(true);
+    stub(streamOf(wire([{ type: "start", references: [] }, done])));
+    expect((await fetchEdits(input)).partial).toBe(false);
+  });
+
+  it("keeps an accent that a network piece cuts in two", async () => {
+    const bytes = new TextEncoder().encode(
+      wire([
+        { type: "start", references: [{ author: "Café", title: "T" }] },
+        done,
+      ]).join(""),
+    );
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        for (const byte of bytes) controller.enqueue(Uint8Array.of(byte));
+        controller.close();
+      },
+    });
+    stub(new Response(body, { headers: { "Content-Type": STREAM_TYPE } }));
+    expect((await fetchEdits(input)).references[0].author).toBe("Café");
+  });
+
+  // A stream that delivers its first event, then fails the way the browser would
+  const failingAfterStart = (failure: Error) => {
+    const encoder = new TextEncoder();
+    let sent = false;
+    return new Response(
+      new ReadableStream<Uint8Array>({
+        pull(controller) {
+          if (sent) return controller.error(failure);
+          sent = true;
+          controller.enqueue(
+            encoder.encode(encodeEvent({ type: "start", references: [] })),
+          );
+        },
+      }),
+      { headers: { "Content-Type": STREAM_TYPE } },
+    );
+  };
+
+  it("lets a cancellation during the answer through untouched", async () => {
+    stub(failingAfterStart(new DOMException("stop", "AbortError")));
+    await expect(fetchEdits(input)).rejects.toMatchObject({
+      name: "AbortError",
+    });
+  });
+
+  it("reports a network error when reading the answer fails", async () => {
+    stub(failingAfterStart(new TypeError("connection lost")));
+    await expect(fetchEdits(input)).rejects.toMatchObject({ code: "network" });
+  });
+
   it("turns an error event in the middle of the answer into an error code", async () => {
     stub(
       streamOf(
@@ -144,6 +206,18 @@ describe("fetchEdits", () => {
     });
   });
 
+  it("knows the code for the app-wide ceiling", async () => {
+    stub(
+      new Response(JSON.stringify({ error: "global_quota_exceeded" }), {
+        status: 429,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+    await expect(fetchEdits(input)).rejects.toMatchObject({
+      code: "global_quota_exceeded",
+    });
+  });
+
   it("still reads a classic JSON answer", async () => {
     stub(
       new Response(JSON.stringify({ edits: [edit(0)], references: [] }), {
@@ -151,6 +225,17 @@ describe("fetchEdits", () => {
       }),
     );
     expect((await fetchEdits(input)).edits).toHaveLength(1);
+  });
+
+  it("treats a JSON answer without edits as a failure", async () => {
+    stub(
+      new Response(JSON.stringify({ references: [] }), {
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+    await expect(fetchEdits(input)).rejects.toMatchObject({
+      code: "upstream_error",
+    });
   });
 
   it("falls back to a generic code for an unreadable error", async () => {

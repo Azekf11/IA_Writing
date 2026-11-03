@@ -7,21 +7,26 @@ import type {
   RewriteResponse,
 } from "./types";
 
-// "network" only exists in the browser: the request never reached the server
+// "network" only exists in the browser: the connection failed, and the server may or may not have
+// counted the attempt
 export type ClientErrorCode = ErrorCode | "network";
 
-const KNOWN: ClientErrorCode[] = [
-  "invalid_request",
-  "unauthorized",
-  "quota_exceeded",
-  "too_many_requests",
-  "not_configured",
-  "refused",
-  "busy",
-  "upstream_error",
-  "server_error",
-  "network",
-];
+// Written as a record so the compiler refuses a code that has no entry here
+const CODES: Record<ClientErrorCode, true> = {
+  invalid_request: true,
+  unauthorized: true,
+  quota_exceeded: true,
+  global_quota_exceeded: true,
+  too_many_requests: true,
+  not_configured: true,
+  refused: true,
+  busy: true,
+  upstream_error: true,
+  server_error: true,
+  network: true,
+};
+
+export const KNOWN_ERROR_CODES = Object.keys(CODES) as ClientErrorCode[];
 
 export class RewriteRequestError extends Error {
   constructor(readonly code: ClientErrorCode) {
@@ -44,7 +49,7 @@ export type RewriteHandlers = {
 };
 
 const asCode = (value: unknown): ClientErrorCode =>
-  KNOWN.includes(value as ClientErrorCode)
+  KNOWN_ERROR_CODES.includes(value as ClientErrorCode)
     ? (value as ClientErrorCode)
     : "upstream_error";
 
@@ -95,6 +100,7 @@ async function readStream(
   const edits: Edit[] = [];
   let references: ReferenceCredit[] = [];
   let finished = false;
+  let partial = false;
 
   try {
     for (;;) {
@@ -112,6 +118,7 @@ async function readStream(
           throw new RewriteRequestError(asCode(event.error));
         } else {
           finished = true;
+          partial = event.partial === true;
         }
       }
     }
@@ -122,5 +129,9 @@ async function readStream(
 
   // The connection ended before the server said it was done
   if (!finished) throw new RewriteRequestError("network");
-  return { edits: edits.sort((a, b) => a.start - b.start), references };
+  return {
+    edits: edits.sort((a, b) => a.start - b.start),
+    references,
+    partial,
+  };
 }

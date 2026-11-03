@@ -14,7 +14,7 @@
     "demoRewrite": "Bien communiquer aide les gens à se rapprocher.",
     "demoReason": "Retire l'ouverture toute faite et les mots gonflés.",
     "sourcesTitle": "D'où viennent les références de style",
-    "sourcesBody": "Livres et essais du domaine public, journaux anciens, et articles récents de presse et de magazines (jusqu'en 2022, avant que le texte écrit par IA n'inonde le web). Les extraits restent sur notre serveur : vous voyez seulement leur origine."
+    "sourcesBody": "Livres et essais du domaine public, journaux anciens, et articles récents de presse et de magazines (jusqu'en 2022, avant que les textes écrits par IA ne deviennent courants en ligne). Jusqu'à trois extraits sont envoyés à Anthropic avec votre texte pour guider les corrections ; votre navigateur ne reçoit que leur source."
   },
   "Editor": {
     "label": "Votre texte",
@@ -26,7 +26,6 @@
     "tooLong": "Ce texte est trop long. La limite est de {max} caractères.",
     "example": "Essayer un exemple",
     "exampleText": "Dans un monde en constante évolution, il est crucial de comprendre que la communication efficace joue un rôle essentiel dans la création de liens significatifs. De plus, il est important de noter que l'écoute n'est pas seulement une compétence, mais un voyage. En conclusion, en adoptant ces principes, nous pouvons libérer tout notre potentiel.",
-    "shortcut": "Ctrl+Entrée pour réécrire",
     "options": "Options",
     "strength": "Ampleur des changements",
     "strengths": {
@@ -40,7 +39,7 @@
       "thorough": "Aussi les signes discrets et les tournures plates."
     },
     "voice": "Votre propre écriture (facultatif)",
-    "voiceHint": "Collez quelques lignes de vous. Les corrections resteront proches de votre façon d'écrire. Non enregistré.",
+    "voiceHint": "Collez quelques lignes de vous. Les corrections resteront proches de votre façon d'écrire. Envoyé avec cette demande, non conservé.",
     "voicePlaceholder": "Un paragraphe d'un e-mail, d'un essai ou d'un message de vous...",
     "voiceCount": "{count} / {max}",
     "stop": "Arrêter"
@@ -69,29 +68,23 @@
     "added": "Après",
     "emptyReplacement": "(supprimé)",
     "inspiredBy": "Références de style : {authors}",
-    "sourcesTitle": "Guidé par",
-    "writing": "Lecture de votre texte...",
     "found": "{count, plural, =0 {Recherche de corrections...} one {# correction pour l'instant} other {# corrections pour l'instant}}",
     "stopped": "Arrêté. Voici ce qui a été trouvé jusque-là.",
     "cutShort": "La réponse s'est interrompue. Voici ce qui est arrivé.",
-    "filters": "Afficher",
-    "all": "Toutes",
-    "pending": "À examiner",
-    "acceptedFilter": "Acceptées",
-    "next": "Suivante",
     "download": "Télécharger .txt",
     "shortcuts": "A accepter, R refuser, J et K naviguer"
   },
   "Errors": {
     "invalid_request": "Ce texte ne peut pas être traité. Vérifiez sa longueur et réessayez.",
     "not_configured": "Le service de réécriture n'est pas encore configuré.",
-    "refused": "L'assistant a refusé de réécrire ce texte.",
-    "busy": "Le service est occupé. Réessayez dans un instant.",
-    "upstream_error": "L'assistant n'a pas pu répondre. Réessayez.",
+    "refused": "L'assistant a refusé de réécrire ce texte. Les tentatives refusées comptent dans la limite du jour.",
+    "busy": "Le service est occupé. Réessayez dans un instant. Les tentatives échouées comptent dans la limite du jour.",
+    "upstream_error": "L'assistant n'a pas pu répondre. Réessayez. Les tentatives échouées comptent dans la limite du jour.",
     "server_error": "Un problème est survenu de notre côté. Réessayez.",
     "network": "Erreur réseau. Vérifiez votre connexion et réessayez.",
     "unauthorized": "Connectez-vous pour réécrire votre texte.",
     "quota_exceeded": "Vous avez atteint la limite du jour. Revenez demain.",
+    "global_quota_exceeded": "Rewrity a atteint sa limite d'utilisation globale pour le moment. Réessayez plus tard.",
     "too_many_requests": "Une réécriture est déjà en cours. Attendez qu'elle se termine, puis réessayez.",
     "page": "Un problème est survenu pendant l'affichage de cette page.",
     "retry": "Réessayer"
@@ -101,17 +94,15 @@
     "history": "Historique"
   },
   "Auth": {
-    "signIn": "Se connecter",
     "emailLabel": "E-mail",
     "emailPlaceholder": "vous@exemple.com",
     "sendLink": "Recevoir un lien de connexion",
     "sending": "Envoi...",
-    "checkEmail": "Vérifiez votre boîte mail : le lien de connexion arrive.",
+    "checkEmail": "Vérifiez votre boîte mail : le lien de connexion arrive. Ouvrez-le dans ce navigateur.",
     "signOut": "Se déconnecter",
     "signedInAs": "Connecté : {email}",
-    "sendFailed": "Impossible d'envoyer le lien. Vérifiez l'adresse et réessayez.",
-    "callbackFailed": "Le lien de connexion est invalide ou expiré. Demandez-en un nouveau.",
-    "unavailable": "La connexion n'est pas configurée."
+    "sendFailed": "Impossible d'envoyer le lien. Vérifiez l'adresse ou réessayez dans quelques minutes.",
+    "callbackFailed": "Ce lien de connexion n'a pas fonctionné. Il ne marche qu'une fois, peu après son envoi, et dans le navigateur qui l'a demandé. Demandez-en un nouveau ici."
   },
   "History": {
     "title": "Historique",
@@ -120,16 +111,18 @@
     "edits": "{count, plural, one {# modification} other {# modifications}}",
     "delete": "Supprimer",
     "unavailable": "L'historique n'est pas configuré.",
+    "loadFailed": "Impossible de charger votre historique. Rechargez la page pour réessayer.",
     "emptyHint": "Vos réécritures apparaîtront ici dès que vous en lancerez une.",
     "deleteFailed": "Impossible de supprimer cette entrée. Réessayez.",
     "reopen": "Rouvrir",
     "search": "Rechercher dans l'historique",
     "noMatch": "Rien ne correspond à « {query} ».",
     "clear": "Tout supprimer",
-    "clearConfirm": "Supprimer les {count} entrées ? Cette action est définitive.",
+    "clearConfirm": "{count, plural, one {Supprimer cette entrée ?} other {Supprimer les # entrées ?}} Cette action est définitive.",
     "clearYes": "Oui, tout supprimer",
     "clearNo": "Annuler",
-    "count": "{count, plural, one {# réécriture} other {# réécritures}}"
+    "count": "{count, plural, one {# réécriture} other {# réécritures}}",
+    "olderHidden": "Seules vos {count} réécritures les plus récentes sont affichées, et la recherche se limite à elles."
   },
   "Footer": {
     "privacy": "Confidentialité",
@@ -139,12 +132,13 @@
     "title": "Confidentialité",
     "intro": "Ce que ce site conserve et qui voit votre texte.",
     "dataTitle": "Ce que nous conservons",
-    "data": "Votre adresse e-mail et, pour chaque réécriture, le texte original, les modifications suggérées et la date. Les autres utilisateurs ne peuvent pas les lire, et vous pouvez supprimer chaque entrée depuis la page d'historique.",
+    "data": "Votre adresse e-mail ; pour chaque réécriture, le texte original, les modifications suggérées, la langue et la date ; et le nombre de vos tentatives par jour. Pour appliquer les limites, une trace de chaque tentative est aussi conservée au moins deux jours, puis retirée lorsqu'une tentative ultérieure, de n'importe quel compte, passe les limites. Votre extrait d'écriture n'est pas conservé. Les entrées de l'historique restent jusqu'à ce que vous les supprimiez depuis la page d'historique, qui affiche vos 50 plus récentes. Votre adresse et vos compteurs quotidiens restent jusqu'à la suppression de votre compte, que seul le responsable du site peut faire pour l'instant. Votre navigateur garde vos cookies de session et vos choix de langue et d'apparence.",
+    "accessTitle": "Qui peut les lire",
+    "access": "Les autres utilisateurs ne peuvent rien en lire. Le responsable du site le peut : votre texte est stocké tel quel, sans chiffrement qui le lui cacherait. Le site est hébergé par Vercel et les données sont stockées chez Supabase, dont le service de connexion peut aussi enregistrer votre adresse IP et votre navigateur.",
     "aiTitle": "Traitement par IA",
-    "ai": "Votre texte est envoyé à Anthropic (Claude) pour produire les suggestions. N'envoyez pas de texte que vous n'avez pas le droit de partager.",
+    "ai": "Votre texte est envoyé à Anthropic (Claude) pour produire les suggestions, avec votre extrait d'écriture si vous en ajoutez un et jusqu'à trois extraits du corpus de style. Anthropic traite ces données selon ses propres conditions. N'envoyez pas de texte que vous n'avez pas le droit de partager.",
     "limitsTitle": "Limites",
-    "limits": "Les suggestions sont des corrections de style. Elles ne changent pas l'auteur d'un texte, et cet outil ne détecte pas les textes écrits par une IA.",
-    "back": "Retour à l'accueil"
+    "limits": "Les suggestions sont des corrections de style. Elles ne changent pas l'auteur d'un texte, et cet outil ne détecte pas les textes écrits par une IA."
   },
   "Theme": {
     "label": "Apparence",

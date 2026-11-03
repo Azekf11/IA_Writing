@@ -45,5 +45,7 @@ next-env.d.ts
 /test-results/
 /playwright-report/
 
-# Site audit output
-/audit/report.*
+# Site audit output (not audit/report.mjs, which writes it)
+/audit/report.md
+/audit/report.json
+/audit/server.log

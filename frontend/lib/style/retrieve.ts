@@ -20,6 +20,8 @@ const CANDIDATES = 10;
 // so no threshold separates "related" from "unrelated". This only drops the weakest matches.
 // Style references guide rhythm, not subject, so a loose match is still usable.
 export const MIN_SIMILARITY = 0.2;
+// A stalled search must not eat the model's time. Far above what a search normally takes.
+const SEARCH_MS = 5_000;
 
 const asVector = (values: number[]) =>
   `[${values.map((v) => v.toFixed(6)).join(",")}]`;
@@ -37,9 +39,13 @@ function onePerAuthor(rows: Reference[]): Reference[] {
   return out;
 }
 
-// Style references are a bonus: any failure here must never block the rewrite itself
+// Style references are a bonus: any failure here must never block the rewrite itself.
+// The search needs the attempt's ticket: the database allows one search per ticket, so the
+// corpus cannot be read through the API without spending attempts. That takes two calls, one
+// that records what it found and one that reads it; the migration explains why.
 export async function findReferences(
   supabase: Pick<SupabaseClient, "rpc">,
+  ticket: string,
   text: string,
   uiLocale: Lang,
   embedder: () => Embedder = getEmbedder,
@@ -52,12 +58,22 @@ export async function findReferences(
 
     // The text's own language wins over the interface language
     const lang = guessLanguage(text) ?? uiLocale;
-    const { data, error } = await supabase.rpc("match_style_passages", {
-      query_embedding: asVector(vector),
-      match_lang: lang,
-      match_kind: null,
-      match_count: CANDIDATES,
-    });
+    const signal = AbortSignal.timeout(SEARCH_MS);
+    const search = await supabase
+      .rpc("search_style_passages", {
+        reservation: ticket,
+        query_embedding: asVector(vector),
+        match_lang: lang,
+        match_count: CANDIDATES,
+      })
+      .abortSignal(signal);
+    if (search.error) {
+      console.error("Style search failed", search.error.code);
+      return [];
+    }
+    const { data, error } = await supabase
+      .rpc("read_style_passages", { reservation: ticket })
+      .abortSignal(signal);
     if (error) {
       console.error("Style search failed", error.code);
       return [];
@@ -67,7 +83,11 @@ export async function findReferences(
     );
     return onePerAuthor(related);
   } catch (error) {
-    console.error("Style references unavailable", error);
+    // The name only: an error message can quote the text it failed on
+    console.error(
+      "Style references unavailable",
+      error instanceof Error ? error.name : typeof error,
+    );
     return [];
   }
 }

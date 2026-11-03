@@ -70,7 +70,7 @@ export async function run(t) {
         viewport: { width: 390, height: 844 },
         hasTouch: true,
       });
-      const page = await ctx.newPage();
+      const page = await openPage(ctx, "speed");
       const cdp = await ctx.newCDPSession(page);
       await cdp.send("Network.enable");
       await cdp.send("Network.emulateNetworkConditions", {
@@ -95,7 +95,7 @@ export async function run(t) {
   try {
     const ctx = await t.browser.newContext();
     await ctx.addCookies(await sessionCookies(env, user));
-    // The daily limit is 20, so stay under it
+    // Far above a demo day's limits: the run raises them while it lasts (see run.mjs)
     await check(
       "speed",
       "route overhead without the model (18 requests, model answers at once)",
@@ -125,7 +125,7 @@ export async function run(t) {
         mock.state.delayMs = 400;
         const p95 = percentile(total, 95);
         expect(p95 <= 400, `p95 of our own time is ${p95} ms`);
-        return `warm: median ${median(total)} ms, p95 ${p95} ms (quota + style search ${median(prep)} ms); ${cold}`;
+        return `warm: median ${median(total)} ms, p95 ${p95} ms (body, session, quota and style search ${median(prep)} ms); ${cold}`;
       },
     );
     await ctx.close();

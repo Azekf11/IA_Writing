@@ -4,7 +4,7 @@ import { LogOut, Mail } from "lucide-react";
 import { useLocale, useTranslations } from "next-intl";
 import { useSearchParams } from "next/navigation";
 import { useId, useState } from "react";
-import { useRouter } from "@/i18n/navigation";
+import { useTypedEarly } from "@/components/use-typed-early";
 import { createClient } from "@/lib/supabase/browser";
 
 type Status = "idle" | "sending" | "sent" | "failed";
@@ -13,18 +13,18 @@ type Status = "idle" | "sending" | "sent" | "failed";
 export function AuthPanel({ email }: { email: string | null }) {
   const t = useTranslations("Auth");
   const locale = useLocale();
-  const router = useRouter();
   // The callback route sends failed sign-ins back with ?auth_error=1
   const linkFailed = useSearchParams().get("auth_error") === "1";
   const id = useId();
   const [value, setValue] = useState("");
+  const box = useTypedEarly<HTMLInputElement>(value, setValue);
   const [status, setStatus] = useState<Status>("idle");
 
   async function signOut() {
     await createClient()?.auth.signOut();
-    // Re-render server components so they drop the old session
-    router.push("/");
-    router.refresh();
+    // A full load: nothing of this session stays on the screen or in memory, and a request still
+    // running stops
+    window.location.assign(new URL(`/${locale}`, window.location.origin));
   }
 
   async function signIn(event: React.FormEvent) {
@@ -34,9 +34,10 @@ export function AuthPanel({ email }: { email: string | null }) {
 
     setStatus("sending");
     const { error } = await supabase.auth.signInWithOtp({
-      email: value.trim(),
+      // The box, not the state: the state can be a moment behind while the scripts arrive
+      email: (box.current?.value ?? value).trim(),
       options: {
-        // Come back to the page the user was on, in their language
+        // Come back in the reader's language
         emailRedirectTo: `${window.location.origin}/auth/callback?next=/${locale}`,
       },
     });
@@ -46,8 +47,8 @@ export function AuthPanel({ email }: { email: string | null }) {
   if (email) {
     return (
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-surface px-4 py-2.5 text-sm">
-        <span className="flex items-center gap-2 text-muted">
-          <span className="size-2 rounded-full bg-add" aria-hidden />
+        <span className="flex min-w-0 items-center gap-2 text-muted wrap-anywhere">
+          <span className="size-2 shrink-0 rounded-full bg-add" aria-hidden />
           {t("signedInAs", { email })}
         </span>
         <button
@@ -84,6 +85,7 @@ export function AuthPanel({ email }: { email: string | null }) {
       </label>
       <div className="flex flex-col gap-2 sm:flex-row">
         <input
+          ref={box}
           id={id}
           type="email"
           required

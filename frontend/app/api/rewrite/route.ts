@@ -1,10 +1,17 @@
+import { isAuthRetryableFetchError } from "@supabase/supabase-js";
 import { after } from "next/server";
 import { RewriteError, requestEdits } from "@/lib/rewrite/claude";
-import { streamResponse } from "@/lib/rewrite/stream-response";
-import { DAILY_LIMIT, MAX_IN_FLIGHT } from "@/lib/rewrite/limits";
 import { guardEdits } from "@/lib/rewrite/guard";
 import { locateEdits } from "@/lib/rewrite/locate";
+import {
+  finishRewrite,
+  releaseQuota,
+  reserveQuota,
+  startRewrite,
+  type Outcome,
+} from "@/lib/rewrite/quota";
 import { RewriteRequestSchema } from "@/lib/rewrite/schema";
+import { streamResponse } from "@/lib/rewrite/stream-response";
 import type {
   Edit,
   ErrorCode,
@@ -24,7 +31,15 @@ function fail(code: ErrorCode, status: number) {
   return Response.json({ error: code } satisfies ErrorResponse, { status });
 }
 
+// The auth server being out of reach or overloaded does not mean the user signed out
+const authIsDown = (error: { status?: number } | null) =>
+  isAuthRetryableFetchError(error) ||
+  error?.status === 429 ||
+  (error?.status ?? 0) >= 500;
+
 export async function POST(request: Request) {
+  const started = performance.now();
+
   // Read as text first so the size check happens before any parsing
   const raw = await request.text().catch(() => "");
   if (raw.length > MAX_BODY_BYTES) return fail("invalid_request", 413);
@@ -43,92 +58,128 @@ export async function POST(request: Request) {
     return fail("not_configured", 503);
   }
 
-  const { data } = await supabase.auth.getClaims();
+  const { data, error: authError } = await supabase.auth.getClaims();
+  if (authIsDown(authError)) return fail("server_error", 500);
   const userId = data?.claims.sub;
   if (!userId) return fail("unauthorized", 401);
 
   const { text, locale, strength, voice, stream } = parsed.data;
   const options = { strength, voice };
-  const started = performance.now();
 
-  // The two lookups do not depend on each other, so they share one round trip
-  const [quota, references] = await Promise.all([
-    supabase.rpc("reserve_quota", {
-      daily_limit: DAILY_LIMIT,
-      max_in_flight: MAX_IN_FLIGHT,
-    }),
-    findReferences(supabase, text, locale),
-  ]);
-  const { data: reservation, error: quotaError } = quota;
-  // 53400 is what reserve_quota raises when this user already has too many rewrites running
-  if (quotaError?.code === "53400") return fail("too_many_requests", 429);
-  if (quotaError) {
-    console.error("Quota check failed", quotaError.code);
-    return fail("server_error", 500);
-  }
-  if (!reservation) return fail("quota_exceeded", 429);
+  // The quota comes first: a refused request costs no embedding, no search and no model call
+  const reservation = await reserveQuota(supabase);
+  if (!reservation.ok) return fail(reservation.code, reservation.status);
+  const { ticket } = reservation;
 
-  const prepared = performance.now();
-
-  // History and slot release run once the answer is out, whichever way it was sent
-  const record = async (edits: Edit[]) => {
-    const [saved, finished] = await Promise.all([
-      supabase.from("rewrites").insert({
-        user_id: userId,
-        original: text,
-        edits,
-        edit_count: edits.length,
-        locale,
-      }),
-      supabase.rpc("finish_rewrite", { reservation }),
-    ]);
-    if (saved.error) console.error("History save failed", saved.error.code);
-    if (finished.error)
-      console.error("finish_rewrite failed", finished.error.code);
-  };
-  const giveBack = async () => {
-    await supabase.rpc("release_quota", { reservation });
-  };
-
-  if (stream) {
-    const { response, settled } = streamResponse({
-      text,
-      references,
-      options,
-      signal: request.signal,
-      prepMs: prepared - started,
-      onSuccess: record,
-      onFailure: giveBack,
-    });
-    after(() => settled);
-    return response;
-  }
+  // A ticket exists from here on. Once the reader leaves, the platform may end the function except
+  // for work handed to after(), so this holds it open until the ticket's bookkeeping is handed over.
+  const holding = Promise.withResolvers<void>();
+  after(() => holding.promise);
 
   try {
-    const rawEdits = await requestEdits(text, references, undefined, options);
-    const modelled = performance.now();
-    const { kept, dropped } = guardEdits(rawEdits);
-    const edits = locateEdits(text, kept);
-    if (Object.keys(dropped).length > 0) console.info("Edits dropped", dropped);
+    // Nobody is waiting any more and nothing has started: the attempt goes back
+    if (request.signal.aborted) {
+      after(() => releaseQuota(supabase, ticket));
+      return new Response(null, { status: 499 });
+    }
 
-    after(() => record(edits));
+    // Starting counts the attempt against the app-wide ceilings. The style search comes after
+    // it on purpose: the database only lets a started ticket read the corpus, once.
+    const start = await startRewrite(supabase, ticket);
+    if (!start.ok) {
+      // The model was not called, so the attempt goes back to the account
+      after(() => releaseQuota(supabase, ticket));
+      return fail(start.code, start.status);
+    }
+    const references = await findReferences(supabase, ticket, text, locale);
 
-    const credits = references.map(({ author, title }) => ({ author, title }));
-    // Visible in the browser's network panel: where the time went
-    const timing = [
-      `prep;dur=${Math.round(prepared - started)}`,
-      `model;dur=${Math.round(modelled - prepared)}`,
-      `total;dur=${Math.round(performance.now() - started)}`,
-    ].join(", ");
-    return Response.json(
-      { edits, references: credits } satisfies RewriteResponse,
-      { headers: { "Server-Timing": timing } },
-    );
-  } catch (error) {
-    // The user got nothing, so give the request back with the ticket only we hold
-    after(giveBack);
-    if (error instanceof RewriteError) return fail(error.code, error.status);
-    console.error("Unhandled rewrite error", error);
-    return fail("server_error", 500);
+    const prepared = performance.now();
+
+    // Only the text and the edits go into the history: the voice sample is never stored
+    const saveHistory = async (edits: Edit[]) => {
+      try {
+        const { error } = await supabase.from("rewrites").insert({
+          user_id: userId,
+          original: text,
+          edits,
+          edit_count: edits.length,
+          locale,
+        });
+        if (error) console.error("History save failed", error.code);
+      } catch (error) {
+        console.error(
+          "History save failed",
+          error instanceof Error ? error.name : typeof error,
+        );
+      }
+    };
+    // Runs once the answer is out, whichever way it was sent. The attempt was started by now, so
+    // it stays counted whatever the outcome; closing the ticket frees its slot.
+    const settle = async (outcome: Outcome, history: Edit[] | null) => {
+      await Promise.all([
+        history ? saveHistory(history) : null,
+        finishRewrite(supabase, ticket, outcome),
+      ]);
+    };
+
+    if (stream) {
+      const { response, settled } = streamResponse({
+        text,
+        references,
+        options,
+        signal: request.signal,
+        prepMs: prepared - started,
+        onSettled: settle,
+      });
+      after(() => settled);
+      return response;
+    }
+
+    try {
+      const rawEdits = await requestEdits(
+        text,
+        references,
+        undefined,
+        options,
+        prepared - started,
+      );
+      const modelled = performance.now();
+      const { kept, dropped } = guardEdits(rawEdits);
+      const edits = locateEdits(text, kept);
+      if (Object.keys(dropped).length > 0)
+        console.info("Edits dropped", dropped);
+      // Every proposal failed a check: that is not "nothing to change"
+      if (edits.length === 0 && rawEdits.length > (dropped.unchanged ?? 0)) {
+        throw new RewriteError("upstream_error", 502);
+      }
+
+      after(() => settle("succeeded", edits));
+
+      const credits = references.map(({ author, title }) => ({
+        author,
+        title,
+      }));
+      // Visible in the browser's network panel: where the time went
+      const timing = [
+        `prep;dur=${Math.round(prepared - started)}`,
+        `model;dur=${Math.round(modelled - prepared)}`,
+        `total;dur=${Math.round(performance.now() - started)}`,
+      ].join(", ");
+      return Response.json(
+        { edits, references: credits } satisfies RewriteResponse,
+        { headers: { "Server-Timing": timing } },
+      );
+    } catch (error) {
+      // The user got nothing usable, but the paid call was made: the attempt stays counted
+      after(() => settle("failed", null));
+      if (error instanceof RewriteError) return fail(error.code, error.status);
+      console.error(
+        "Unhandled rewrite error",
+        error instanceof Error ? error.name : typeof error,
+      );
+      return fail("server_error", 500);
+    }
+  } finally {
+    holding.resolve();
   }
 }
