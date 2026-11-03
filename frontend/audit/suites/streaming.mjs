@@ -3,11 +3,14 @@
 import { openPage } from "../browser.mjs";
 import {
   check,
+  closedAs,
   createUser,
   deleteUser,
   expect,
+  getUsage,
   historyRows,
   sessionCookies,
+  ticketsOf,
   until,
 } from "../lib.mjs";
 
@@ -35,11 +38,6 @@ export async function run(t) {
         await page.getByLabel("Your text").fill(TEXT);
         const started = Date.now();
         await page.getByRole("button", { name: "Rewrite" }).click();
-        await page
-          .getByText("Plainer")
-          .first()
-          .waitFor({ state: "attached", timeout: 100 })
-          .catch(() => {});
         await page
           .getByRole("button", { name: "Stop" })
           .waitFor({ timeout: 8000 });
@@ -71,7 +69,8 @@ export async function run(t) {
           await page.getByRole("button", { name: "Accept all" }).isDisabled(),
           "Accept all was usable",
         );
-        await page.getByText(/\d+ edits? so far/).waitFor();
+        await page.getByText("1 edit so far").waitFor();
+        await page.getByText("2 edits so far").waitFor({ timeout: 8000 });
         await page
           .getByRole("button", { name: "Edit the text" })
           .waitFor({ timeout: 15000 });
@@ -122,37 +121,56 @@ export async function run(t) {
           "no summary after stopping",
         );
         mock.state.gapMs = 350;
+        // Three rewrites came before this one
         const saved = await until(
-          async () => (await historyRows(env, user)).length >= 3,
+          async () => (await historyRows(env, user)).length === 4,
           { timeout: 8000 },
         );
         expect(saved, "the stopped rewrite was not saved to history");
+        const usage = await getUsage(env, user);
+        expect(usage === 4, `usage is ${usage}, the stopped attempt counts`);
+        const state = await closedAs(env, user);
+        expect(state === "cancelled", `ticket closed as ${state}`);
       },
     );
 
     await check(
       "streaming",
-      "closing the page mid-answer gives the request back when nothing arrived",
+      "closing the page before the first edit: the call was made, so it counts, and the slot is freed",
       async () => {
         const other = await createUser(env, "leaver");
-        const c2 = await t.browser.newContext();
-        await c2.addCookies(await sessionCookies(env, other));
-        const p2 = await openPage(c2, "streaming");
-        await p2.goto(`${t.base}/en`, { waitUntil: "networkidle" });
-        mock.state.delayMs = 2500;
-        await p2.getByLabel("Your text").fill(TEXT);
-        await p2.getByRole("button", { name: "Rewrite" }).click();
-        await p2.getByRole("button", { name: "Rewriting..." }).waitFor();
-        await p2.close();
-        await c2.close();
-        mock.state.delayMs = 400;
-        const { getUsage } = await import("../lib.mjs");
-        const back = await until(
-          async () => (await getUsage(env, other)) === 0 && "zero",
-          { timeout: 9000 },
-        );
-        await deleteUser(env, other);
-        expect(back === "zero", "the request was not given back");
+        try {
+          const c2 = await t.browser.newContext();
+          await c2.addCookies(await sessionCookies(env, other));
+          const p2 = await openPage(c2, "streaming");
+          await p2.goto(`${t.base}/en`, { waitUntil: "networkidle" });
+          mock.reset();
+          mock.state.delayMs = 2500;
+          await p2.getByLabel("Your text").fill(TEXT);
+          await p2.getByRole("button", { name: "Rewrite" }).click();
+          // Only once the model has the request is it a paid call to walk away from
+          const called = await until(() => mock.received.length === 1, {
+            timeout: 5000,
+          });
+          expect(called, "the model was never called");
+          await p2.close();
+          await c2.close();
+          const state = await closedAs(env, other);
+          expect(state === "cancelled", `ticket closed as ${state}`);
+          const usage = await getUsage(env, other);
+          expect(usage === 1, `usage is ${usage}, the attempt must count`);
+          const open = (await ticketsOf(env, other)).filter((ticket) =>
+            ["reserved", "started"].includes(ticket.state),
+          );
+          expect(open.length === 0, "the slot is still held");
+          expect(
+            (await historyRows(env, other)).length === 0,
+            "nothing arrived, so nothing should be saved",
+          );
+        } finally {
+          mock.state.delayMs = 400;
+          await deleteUser(env, other);
+        }
       },
     );
 

@@ -4,13 +4,13 @@ import { RotateCcw } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useEffect } from "react";
 
-// Shown when a page throws while rendering; `reset` retries the render
+// Shown when a page throws while rendering; `retry` fetches it again and renders it
 export default function LocaleError({
   error,
-  reset,
+  retry,
 }: {
   error: Error & { digest?: string };
-  reset: () => void;
+  retry: () => void;
 }) {
   const t = useTranslations("Errors");
 
@@ -23,7 +23,7 @@ export default function LocaleError({
       <p className="text-lg font-semibold">{t("page")}</p>
       <button
         type="button"
-        onClick={reset}
+        onClick={() => retry()}
         className="inline-flex items-center gap-2 rounded-xl bg-accent px-5 py-2.5 font-semibold text-accent-foreground transition-all hover:brightness-110 active:scale-[0.98]"
       >
         <RotateCcw className="size-4" aria-hidden />

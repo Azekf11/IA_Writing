@@ -135,15 +135,17 @@ export async function run(t) {
       for (const name of ["Blue", "Violet", "Emerald", "Amber", "Rose"]) {
         await open();
         await page.getByRole("radio", { name }).click();
+        // The variable itself: a colour read now would still be in its transition
         seen.add(
-          await rgb(
-            page,
-            "button[type=submit], a[aria-current='page']",
-            "color",
+          await page.evaluate(() =>
+            getComputedStyle(document.documentElement).getPropertyValue(
+              "--accent",
+            ),
           ),
         );
         await page.keyboard.press("Escape");
       }
+      expect(seen.size === 5, `${seen.size} different colours for 5 accents`);
       await open();
       await page.getByRole("radio", { name: "Rose" }).click();
       await page.reload({ waitUntil: "networkidle" });

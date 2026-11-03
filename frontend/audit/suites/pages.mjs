@@ -38,7 +38,7 @@ export async function run(t) {
 
   await check("pages", "root redirects by browser language", async () => {
     const fr = await t.browser.newContext({ locale: "fr-FR" });
-    const p = await fr.newPage();
+    const p = await openPage(fr, "pages");
     await p.goto(`${t.base}/`);
     const url = p.url();
     await fr.close();
@@ -104,12 +104,37 @@ export async function run(t) {
     },
   );
 
-  await check("security", "no secret reaches the browser", async () => {
-    await page.goto(`${t.base}/en`, { waitUntil: "networkidle" });
-    const html = await page.content();
-    const leak = /sb_secret|service_role|ANTHROPIC_API_KEY|sk-ant/.test(html);
-    expect(!leak, "a secret-looking string is in the page");
-  });
+  await check(
+    "security",
+    "no secret reaches the browser, in the page or in its scripts",
+    async () => {
+      await page.goto(`${t.base}/en`, { waitUntil: "networkidle" });
+      const sources = await page.evaluate(() =>
+        [...document.scripts].map((script) => script.src).filter(Boolean),
+      );
+      const scripts = await Promise.all(
+        sources.map(async (src) => (await fetch(src)).text()),
+      );
+      const secrets = [
+        // A key, not the prefix the Supabase client checks for in its own code
+        /sb_secret_[\w-]{8}|sk-ant-[\w-]{8}|service_role|ANTHROPIC_API_KEY/,
+        // What the server of this run actually holds
+        "audit-key-not-real",
+        t.env.SECRET_KEY,
+      ];
+      for (const body of [await page.content(), ...scripts]) {
+        for (const secret of secrets) {
+          const leak =
+            typeof secret === "string"
+              ? body.includes(secret)
+              : secret.test(body);
+          expect(!leak, `a secret-looking string reached the browser`);
+        }
+      }
+      expect(scripts.length > 0, "no script was read");
+      return `${scripts.length} scripts read`;
+    },
+  );
 
   await context.close();
 }

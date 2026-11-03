@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import robots from "@/app/robots";
 import sitemap from "@/app/sitemap";
-import { siteUrl } from "@/lib/site";
+import { alternatesFor, siteUrl } from "@/lib/site";
 
 afterEach(() => vi.unstubAllEnvs());
 
@@ -21,6 +21,22 @@ describe("siteUrl", () => {
     vi.stubEnv("NEXT_PUBLIC_SITE_URL", "");
     vi.stubEnv("VERCEL_PROJECT_PRODUCTION_URL", "");
     expect(siteUrl()).toBe("http://localhost:3000");
+  });
+});
+
+describe("alternatesFor", () => {
+  it("gives a page its own address and its own translations", () => {
+    expect(alternatesFor("fr", "/privacy")).toEqual({
+      canonical: "/fr/privacy",
+      languages: { en: "/en/privacy", fr: "/fr/privacy" },
+    });
+  });
+
+  it("gives the home page the language root", () => {
+    expect(alternatesFor("en")).toEqual({
+      canonical: "/en",
+      languages: { en: "/en", fr: "/fr" },
+    });
   });
 });
 

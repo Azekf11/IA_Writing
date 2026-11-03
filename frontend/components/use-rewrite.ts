@@ -10,7 +10,7 @@ import type { RewriteInput } from "@/lib/rewrite/client";
 import type { Edit, ReferenceCredit } from "@/lib/rewrite/types";
 
 // editing: the text box. writing: the model is still answering and edits appear as they come.
-// reviewing: the answer is complete (or was stopped).
+// reviewing: the answer is complete, or was stopped, or stopped short.
 export type View = "editing" | "writing" | "reviewing";
 
 const isAbort = (error: unknown) =>
@@ -27,11 +27,13 @@ export function useRewrite(initial: Edit[] = []) {
   const [credits, setCredits] = useState<ReferenceCredit[]>([]);
   const [errorCode, setErrorCode] = useState<ClientErrorCode | null>(null);
   const [stopped, setStopped] = useState(false);
+  // The model stopped early: these are only the edits it wrote before that
+  const [cutShort, setCutShort] = useState(false);
   const abort = useRef<AbortController | null>(null);
   // Edits seen so far, readable from the catch block without waiting for a render
   const seen = useRef<Edit[]>(initial);
 
-  // Leaving the page cancels the request, so nobody pays for an answer nobody reads
+  // Leaving the page cancels the request, so nobody pays for more of an answer nobody reads
   useEffect(() => () => abort.current?.abort(), []);
 
   async function start(input: RewriteInput) {
@@ -42,6 +44,7 @@ export function useRewrite(initial: Edit[] = []) {
 
     setErrorCode(null);
     setStopped(false);
+    setCutShort(false);
     setEdits([]);
     setCredits([]);
     // Stay on the editor until the first edit arrives: no empty review screen
@@ -53,23 +56,31 @@ export function useRewrite(initial: Edit[] = []) {
         signal: controller.signal,
         onStart: setCredits,
         onEdit: (edit) => {
-          seen.current = [...seen.current, edit];
+          // Edits arrive in the model's order; the review and the result need reading order
+          seen.current = [...seen.current, edit].sort(
+            (a, b) => a.start - b.start,
+          );
           setEdits(seen.current);
           setView("writing");
         },
       });
       setEdits(result.edits);
       setCredits(result.references);
+      setCutShort(result.partial === true);
       setView("reviewing");
     } catch (error) {
       if (isAbort(error)) return;
-      // Edits already shown stay: an error after them is not a reason to lose them
-      if (seen.current.length > 0) {
+      const code =
+        error instanceof RewriteRequestError ? error.code : "server_error";
+      // Edits already shown stay: an error after them is not a reason to lose them. A refusal is
+      // different: the model declined the text, and the server keeps nothing of that answer.
+      if (seen.current.length > 0 && code !== "refused") {
+        setCutShort(true);
         setView("reviewing");
       } else {
-        setErrorCode(
-          error instanceof RewriteRequestError ? error.code : "server_error",
-        );
+        seen.current = [];
+        setEdits([]);
+        setErrorCode(code);
         setView("editing");
       }
     } finally {
@@ -91,6 +102,7 @@ export function useRewrite(initial: Edit[] = []) {
     credits,
     errorCode,
     stopped,
+    cutShort,
     start,
     stop,
     backToEditor: () => setView("editing"),

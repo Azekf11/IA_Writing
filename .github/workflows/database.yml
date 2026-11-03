@@ -1,0 +1,24 @@
+name: Database
+
+on:
+  push:
+    branches: [main]
+    paths: ["supabase/**", ".github/workflows/database.yml"]
+  pull_request:
+    paths: ["supabase/**", ".github/workflows/database.yml"]
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - uses: supabase/setup-cli@v3
+        with:
+          version: 2.113.0
+      # A throwaway stack on the runner: every migration from scratch, no secret, no model
+      - run: supabase start -x studio,imgproxy,storage-api,realtime,edge-runtime,logflare,vector,postgres-meta,supavisor
+      - run: node --test --test-concurrency=1 'supabase/tests/*.test.mjs'

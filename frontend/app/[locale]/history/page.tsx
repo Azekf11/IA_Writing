@@ -3,45 +3,11 @@ import { getTranslations, setRequestLocale } from "next-intl/server";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
-import { AuthPanel } from "@/components/auth-panel";
-import { HistoryList } from "@/components/history-list";
+import { HistoryContent } from "@/components/history-content";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
 import { routing } from "@/i18n/routing";
-import { createClient } from "@/lib/supabase/server";
-
-// Reads the session cookie, so this page is rendered per request
-async function HistoryContent() {
-  const t = await getTranslations("History");
-  const supabase = await createClient();
-  if (!supabase) return <p>{t("unavailable")}</p>;
-
-  const { data } = await supabase.auth.getClaims();
-  if (!data) {
-    return (
-      <div className="flex flex-col gap-4">
-        <p className="text-muted">{t("signInPrompt")}</p>
-        <AuthPanel email={null} />
-      </div>
-    );
-  }
-
-  // RLS limits this query to the signed-in user's rows
-  const { data: rows } = await supabase
-    .from("rewrites")
-    .select("id, original, edits, edit_count, created_at")
-    .order("created_at", { ascending: false })
-    .limit(50);
-
-  const items = (rows ?? []).map((row) => ({
-    id: row.id,
-    original: row.original,
-    edits: Array.isArray(row.edits) ? row.edits : [],
-    editCount: row.edit_count,
-    createdAt: row.created_at,
-  }));
-  return <HistoryList items={items} />;
-}
+import { alternatesFor } from "@/lib/site";
 
 export async function generateMetadata({
   params,
@@ -50,7 +16,7 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const { locale } = await params;
   const t = await getTranslations({ locale, namespace: "History" });
-  return { title: t("title") };
+  return { title: t("title"), alternates: alternatesFor(locale, "/history") };
 }
 
 export default async function HistoryPage({

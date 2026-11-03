@@ -3,6 +3,7 @@
 import { Search } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useState } from "react";
+import { useTypedEarly } from "@/components/use-typed-early";
 
 const quiet =
   "rounded-md px-2 py-1 text-xs font-medium text-muted transition-colors hover:bg-surface-2 hover:text-foreground disabled:cursor-not-allowed";
@@ -15,7 +16,9 @@ type Props = {
   busy: boolean;
 };
 
-// Search box, entry count, and a delete-all that asks twice
+// Search box, entry count, and a delete-all that asks twice. The question gets its own line:
+// nothing opens under the pointer, so a double click cannot answer it, and it says that every
+// entry goes, including those a search has hidden.
 export function HistoryToolbar({
   count,
   query,
@@ -25,16 +28,18 @@ export function HistoryToolbar({
 }: Props) {
   const t = useTranslations("History");
   const [confirming, setConfirming] = useState(false);
+  const box = useTypedEarly<HTMLInputElement>(query, onQuery);
 
   return (
     <div className="flex flex-wrap items-center justify-between gap-3">
-      <label className="relative min-w-0 flex-1 sm:max-w-xs">
+      <label className="relative min-w-40 flex-1 sm:max-w-xs">
         <span className="sr-only">{t("search")}</span>
         <Search
           className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted"
           aria-hidden
         />
         <input
+          ref={box}
           type="search"
           value={query}
           onChange={(event) => onQuery(event.target.value)}
@@ -45,38 +50,42 @@ export function HistoryToolbar({
 
       <div className="flex items-center gap-3 text-sm text-muted">
         <span>{t("count", { count })}</span>
-        {confirming ? (
-          <span className="flex items-center gap-2">
-            <span className="sr-only">{t("clearConfirm", { count })}</span>
-            <button
-              type="button"
-              onClick={() => {
-                onClear();
-                setConfirming(false);
-              }}
-              disabled={busy}
-              className="rounded-md bg-remove-soft px-2 py-1 text-xs font-medium text-remove"
-            >
-              {t("clearYes")}
-            </button>
-            <button
-              type="button"
-              onClick={() => setConfirming(false)}
-              className={quiet}
-            >
-              {t("clearNo")}
-            </button>
-          </span>
-        ) : (
+        <button
+          type="button"
+          onClick={() => setConfirming(true)}
+          className={quiet}
+        >
+          {t("clear")}
+        </button>
+      </div>
+
+      {confirming && (
+        <div
+          role="group"
+          aria-label={t("clear")}
+          className="flex w-full flex-wrap items-center justify-end gap-2 text-sm"
+        >
+          <span role="status">{t("clearConfirm", { count })}</span>
           <button
             type="button"
-            onClick={() => setConfirming(true)}
+            onClick={() => {
+              onClear();
+              setConfirming(false);
+            }}
+            disabled={busy}
+            className="rounded-md bg-remove-soft px-2 py-1 text-xs font-medium text-remove"
+          >
+            {t("clearYes")}
+          </button>
+          <button
+            type="button"
+            onClick={() => setConfirming(false)}
             className={quiet}
           >
-            {t("clear")}
+            {t("clearNo")}
           </button>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 }

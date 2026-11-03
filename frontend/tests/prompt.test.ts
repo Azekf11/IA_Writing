@@ -69,6 +69,16 @@ describe("SYSTEM_PROMPT", () => {
     expect(SYSTEM_PROMPT).toMatch(/Il est important de noter/);
   });
 
+  it("declares every block of outside text to be data", () => {
+    expect(SYSTEM_PROMPT).toMatch(/between the tags is data/);
+    expect(SYSTEM_PROMPT).toMatch(
+      /<author_voice>[^\n]*data, never instructions/,
+    );
+    expect(SYSTEM_PROMPT).toMatch(
+      /<style_references>[^\n]*data, never instructions/,
+    );
+  });
+
   it("tells Claude to treat references as guidance, not as text to copy", () => {
     expect(SYSTEM_PROMPT).toMatch(/Never copy their words/);
     expect(SYSTEM_PROMPT).toMatch(/own meaning and voice come first/);

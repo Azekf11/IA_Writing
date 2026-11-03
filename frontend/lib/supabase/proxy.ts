@@ -14,11 +14,15 @@ export async function refreshSession(
   const supabase = createServerClient(env.url, env.key, {
     cookies: {
       getAll: () => request.cookies.getAll(),
-      setAll(cookiesToSet) {
+      setAll(cookiesToSet, headers) {
         cookiesToSet.forEach(({ name, value, options }) => {
           request.cookies.set(name, value);
           response.cookies.set(name, value, options);
         });
+        // A response that sets a session cookie must never be served from a shared cache
+        Object.entries(headers).forEach(([name, value]) =>
+          response.headers.set(name, value),
+        );
       },
     },
   });

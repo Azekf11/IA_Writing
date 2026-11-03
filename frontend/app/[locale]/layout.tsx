@@ -5,7 +5,7 @@ import { getTranslations, setRequestLocale } from "next-intl/server";
 import { notFound } from "next/navigation";
 import { ThemeProvider } from "@/components/theme-provider";
 import { routing } from "@/i18n/routing";
-import { siteUrl } from "@/lib/site";
+import { alternatesFor, siteUrl } from "@/lib/site";
 import { ACCENT_SCRIPT } from "@/lib/accent";
 import "../globals.css";
 
@@ -40,11 +40,8 @@ export async function generateMetadata({
     metadataBase: new URL(siteUrl()),
     title: { default: t("title"), template: `%s · ${t("title")}` },
     description: t("description"),
-    // Each language page points at its translations
-    alternates: {
-      canonical: `/${locale}`,
-      languages: Object.fromEntries(routing.locales.map((l) => [l, `/${l}`])),
-    },
+    // Each language page points at its translations. Other pages say the same for themselves.
+    alternates: alternatesFor(locale),
     openGraph: {
       type: "website",
       siteName: t("title"),

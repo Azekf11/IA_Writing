@@ -6,6 +6,7 @@ import { useId } from "react";
 import { cn } from "@/lib/cn";
 import { countWords, MAX_CHARS } from "@/lib/text";
 import { RewriteOptions, type Options } from "@/components/rewrite-options";
+import { useTypedEarly } from "@/components/use-typed-early";
 
 export type EditorStatus = "idle" | "loading";
 
@@ -36,11 +37,15 @@ export function TextEditor({
   const t = useTranslations("Editor");
   const id = useId();
 
+  const box = useTypedEarly<HTMLTextAreaElement>(value, onChange);
+
   const loading = status === "loading";
-  const tooLong = value.length > MAX_CHARS;
+  // Measured as it will be sent: an accent pasted as a separate character counts once
+  const length = value.normalize("NFC").length;
+  const tooLong = length > MAX_CHARS;
   const empty = value.trim().length === 0;
   const canSubmit = !loading && !tooLong && !empty;
-  const ratio = Math.min(value.length / MAX_CHARS, 1);
+  const ratio = Math.min(length / MAX_CHARS, 1);
 
   return (
     <form
@@ -56,6 +61,7 @@ export function TextEditor({
 
       <div className="relative">
         <textarea
+          ref={box}
           id={id}
           value={value}
           onChange={(event) => onChange(event.target.value)}
@@ -112,7 +118,7 @@ export function TextEditor({
             {t("words", { count: countWords(value) })}
             {" · "}
             <span className={cn(tooLong && "font-medium text-remove")}>
-              {t("characters", { count: value.length, max: MAX_CHARS })}
+              {t("characters", { count: length, max: MAX_CHARS })}
             </span>
           </p>
           <div

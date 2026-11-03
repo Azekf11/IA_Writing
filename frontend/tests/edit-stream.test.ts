@@ -14,7 +14,7 @@ function parse(text: string, size: number) {
   for (let i = 0; i < text.length; i += size) {
     out.push(...parser.push(text.slice(i, i + size)));
   }
-  return { out, skipped: parser.skipped };
+  return out;
 }
 
 describe("EditStreamParser", () => {
@@ -22,12 +22,12 @@ describe("EditStreamParser", () => {
   const text = JSON.stringify({ edits });
 
   it("returns every edit of a whole answer", () => {
-    expect(parse(text, text.length).out).toEqual(edits);
+    expect(parse(text, text.length)).toEqual(edits);
   });
 
   it("gives the same edits however the answer is cut into pieces", () => {
     for (let size = 1; size <= 12; size++) {
-      expect(parse(text, size).out).toEqual(edits);
+      expect(parse(text, size)).toEqual(edits);
     }
   });
 
@@ -41,34 +41,43 @@ describe("EditStreamParser", () => {
   it("does not mistake braces and brackets inside strings for structure", () => {
     const tricky = [edit('say "hi" {now} [then]', 'a \\ "quote" }', "why } ]")];
     const json = JSON.stringify({ edits: tricky });
-    for (const size of [1, 3, 7]) expect(parse(json, size).out).toEqual(tricky);
+    for (const size of [1, 3, 7]) expect(parse(json, size)).toEqual(tricky);
+  });
+
+  it("is not fooled by a single escaped quote, even right before a brace", () => {
+    const odd = [edit('a 5" screen'), edit('he said "}'), edit("next")];
+    const json = JSON.stringify({ edits: odd });
+    for (const size of [1, 3, 7]) expect(parse(json, size)).toEqual(odd);
   });
 
   it("handles accents, emoji and escaped newlines", () => {
     const odd = [edit("caf\u00e9 \u2615\nligne", "x", "accentu\u00e9")];
     const json = JSON.stringify({ edits: odd });
-    expect(parse(json, 2).out).toEqual(odd);
+    expect(parse(json, 2)).toEqual(odd);
   });
 
   it("returns nothing for an empty list", () => {
-    expect(parse('{"edits":[]}', 1).out).toEqual([]);
+    expect(parse('{"edits":[]}', 1)).toEqual([]);
   });
 
   it("skips a piece that is not a valid edit and keeps going", () => {
     const json =
       '{"edits":[{"original":"a"},{"original":"b","replacement":"c","reason":"d"}]}';
-    const { out, skipped } = parse(json, 5);
-    expect(out).toEqual([edit("b", "c", "d")]);
-    expect(skipped).toBe(1);
+    expect(parse(json, 5)).toEqual([edit("b", "c", "d")]);
   });
 
   it("keeps the complete edits when the answer is cut off", () => {
     const cut = text.slice(0, text.indexOf('"two"') + 12);
-    expect(parse(cut, 4).out).toEqual([edits[0]]);
+    expect(parse(cut, 4)).toEqual([edits[0]]);
+  });
+
+  it("survives text that is not JSON at all", () => {
+    const parser = new EditStreamParser();
+    expect(parser.push("I cannot help with that.")).toEqual([]);
   });
 
   it("ignores whitespace and pretty printing", () => {
     const pretty = JSON.stringify({ edits }, null, 2);
-    expect(parse(pretty, 3).out).toEqual(edits);
+    expect(parse(pretty, 3)).toEqual(edits);
   });
 });

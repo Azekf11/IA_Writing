@@ -39,7 +39,7 @@ export async function run(t) {
           (a) => localStorage.setItem("accent", a),
           accent,
         );
-        const page = await ctx.newPage();
+        const page = await openPage(ctx, "look");
         await page.goto(`${t.base}/en`, { waitUntil: "networkidle" });
         await page.getByLabel("Your text").fill("x");
         // The submit button fades in; measure it once it has settled
@@ -59,6 +59,57 @@ export async function run(t) {
     }
   }
 
+  // The first states above hold no review: its colours, and a rejected edit's, are checked here
+  for (const scheme of ["light", "dark"]) {
+    await check("a11y", `${scheme} review, one edit rejected`, async () => {
+      const ctx = await t.browser.newContext({ colorScheme: scheme });
+      const page = await openPage(ctx, "look");
+      const edit = (id, original, start) => ({
+        id,
+        original,
+        replacement: "plain",
+        reason: "A simpler word",
+        start,
+        end: start + original.length,
+      });
+      const events = [
+        {
+          type: "start",
+          references: [{ author: "An author", title: "A title" }],
+        },
+        { type: "edit", edit: edit("edit-0", "crucial", 6) },
+        { type: "edit", edit: edit("edit-1", "immediately", 17) },
+        { type: "done", dropped: 0, ms: { prep: 1, model: 1 } },
+      ];
+      await page.route("**/api/rewrite", (route) =>
+        route.fulfill({
+          status: 200,
+          contentType: "application/x-ndjson",
+          body: events.map((e) => JSON.stringify(e)).join("\n") + "\n",
+        }),
+      );
+      await page.goto(`${t.base}/en`, { waitUntil: "networkidle" });
+      await page
+        .getByLabel("Your text")
+        .fill("It is crucial to act immediately.");
+      await page.getByRole("button", { name: "Rewrite" }).click();
+      await page
+        .getByRole("button", { name: "Reject", exact: true })
+        .first()
+        .click();
+      // Let the colours settle before measuring them
+      await page.waitForTimeout(500);
+      const { violations } = await axe(page, (b) => b.withTags(AXE_TAGS));
+      await ctx.close();
+      if (violations.length) {
+        const node = violations[0].nodes[0];
+        throw new Error(
+          `${violations[0].id}: ${node.target.join(" ")}: ${node.any[0]?.message ?? ""}`,
+        );
+      }
+    });
+  }
+
   const screens = [
     ["phone", 360, 740],
     ["tablet", 768, 1024],
@@ -68,7 +119,7 @@ export async function run(t) {
     for (const path of ["/en", "/fr", "/en/history", "/en/privacy"]) {
       await check("layout", `${name} ${path}: no sideways scroll`, async () => {
         const ctx = await t.browser.newContext({ viewport: { width, height } });
-        const page = await ctx.newPage();
+        const page = await openPage(ctx, "look");
         await page.goto(`${t.base}${path}`, { waitUntil: "networkidle" });
         const over = await overflowX(page);
         await ctx.close();
@@ -85,7 +136,7 @@ export async function run(t) {
         viewport: { width: 390, height: 844 },
         hasTouch: true,
       });
-      const page = await ctx.newPage();
+      const page = await openPage(ctx, "look");
       await page.goto(`${t.base}/en`, { waitUntil: "networkidle" });
       const small = await page.evaluate(() =>
         [...document.querySelectorAll("button, a[href], input, textarea")]

@@ -4,7 +4,8 @@ import { issues } from "./lib.mjs";
 // Requests the audit makes fail on purpose; their console echo is not a finding
 const EXPECTED_CONSOLE = /Failed to load resource/;
 
-export async function openPage(context, label) {
+// `refused` names the one address a check makes the API refuse with a 401
+export async function openPage(context, label, { refused } = {}) {
   const page = await context.newPage();
   const where = () =>
     `${label} @ ${new URL(page.url() || "http://x/").pathname}`;
@@ -34,6 +35,7 @@ export async function openPage(context, label) {
     const url = response.url();
     if (response.status() < 400 || url.includes("/api/rewrite")) return;
     if (url.includes("/nope")) return;
+    if (refused && response.status() === 401 && url.includes(refused)) return;
     issues.push({
       where: where(),
       kind: `http ${response.status()}`,

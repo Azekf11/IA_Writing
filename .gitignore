@@ -8,11 +8,12 @@ __pycache__/
 dist/
 build/
 
-# Datasets and experiments (never commit data)
+# Corpus data: downloaded books, crawled articles and built passages (never commit data;
+# the news passages are copyrighted by their publishers)
 /data/
+corpus-pipeline/data/
+# Where the pipeline wrote before it was renamed: a clone may still hold data there
 backend/data/
-mlruns/
-wandb/
 
 # Secrets
 .env

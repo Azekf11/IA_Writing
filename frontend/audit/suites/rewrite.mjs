@@ -5,6 +5,7 @@ import {
   createUser,
   deleteUser,
   expect,
+  passageBodies,
   sessionCookies,
 } from "../lib.mjs";
 
@@ -224,9 +225,14 @@ async function moreChecks(s) {
     mock.reset();
     await s.send(FRENCH);
     await s.open();
+    const sent = mock.received.at(-1).content;
     expect(
-      mock.received.at(-1).referenceCount >= 1,
-      "no reference for French text",
+      passageBodies("fr").some((body) => sent.includes(body)),
+      "no French passage reached the model",
+    );
+    expect(
+      !passageBodies("en").some((body) => sent.includes(body)),
+      "an English passage was sent for a French text",
     );
     await s.back();
   });

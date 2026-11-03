@@ -15,7 +15,8 @@ const securityHeaders = [
 ];
 
 const nextConfig: NextConfig = {
-  // The route reads the embedding files at runtime, which the file tracer cannot see
+  // The route needs the embedding files at runtime. The file tracer finds them today; this makes
+  // sure of it, since without them rewrites go on with no style excerpts and only a log line says so.
   outputFileTracingIncludes: {
     "/api/rewrite": ["./data/embedder/**"],
   },

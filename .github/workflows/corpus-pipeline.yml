@@ -1,0 +1,26 @@
+name: Corpus pipeline
+
+on:
+  push:
+    branches: [main]
+    paths: ["corpus-pipeline/**", ".github/workflows/corpus-pipeline.yml"]
+  pull_request:
+    paths: ["corpus-pipeline/**", ".github/workflows/corpus-pipeline.yml"]
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: corpus-pipeline
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          cache-dependency-glob: corpus-pipeline/uv.lock
+      - run: uv sync --group dev --locked
+      - run: uv run ruff check .
+      - run: uv run ruff format --check .
+      - run: uv run pytest -q

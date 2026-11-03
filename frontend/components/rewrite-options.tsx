@@ -2,6 +2,7 @@
 
 import { useTranslations } from "next-intl";
 import { useId } from "react";
+import { useTypedEarly } from "@/components/use-typed-early";
 import { cn } from "@/lib/cn";
 import {
   MAX_VOICE_CHARS,
@@ -23,6 +24,8 @@ type Props = {
 export function RewriteOptions({ value, onChange, disabled }: Props) {
   const t = useTranslations("Editor");
   const voiceId = useId();
+  const onVoice = (voice: string) => onChange({ ...value, voice });
+  const voiceBox = useTypedEarly<HTMLTextAreaElement>(value.voice, onVoice);
 
   return (
     <details className="group rounded-lg border border-border bg-background">
@@ -42,7 +45,7 @@ export function RewriteOptions({ value, onChange, disabled }: Props) {
           <div
             role="radiogroup"
             aria-label={t("strength")}
-            className="grid grid-cols-3 gap-1 rounded-lg bg-surface-2 p-1"
+            className="flex flex-wrap gap-1 rounded-lg bg-surface-2 p-1"
           >
             {STRENGTHS.map((strength) => {
               const active = value.strength === strength;
@@ -54,7 +57,9 @@ export function RewriteOptions({ value, onChange, disabled }: Props) {
                   aria-checked={active}
                   onClick={() => onChange({ ...value, strength })}
                   className={cn(
-                    "rounded-md px-2 py-1.5 text-sm font-medium transition-colors",
+                    // One word on one line, on a phone too: the rule for long links is not for these.
+                    // Equal widths for as long as they fit, then the row wraps.
+                    "flex-1 rounded-md px-2 py-1.5 text-sm font-medium transition-colors [overflow-wrap:normal] max-sm:px-0.5",
                     active
                       ? "bg-surface text-foreground shadow-sm"
                       : "text-muted hover:text-foreground",
@@ -75,14 +80,13 @@ export function RewriteOptions({ value, onChange, disabled }: Props) {
             {t("voice")}
           </label>
           <textarea
+            ref={voiceBox}
             id={voiceId}
             value={value.voice}
             disabled={disabled}
             maxLength={MAX_VOICE_CHARS}
             rows={3}
-            onChange={(event) =>
-              onChange({ ...value, voice: event.target.value })
-            }
+            onChange={(event) => onVoice(event.target.value)}
             placeholder={t("voicePlaceholder")}
             className="w-full resize-y rounded-lg border border-border bg-surface p-3 text-sm leading-relaxed transition-colors placeholder:text-muted/70 focus:border-accent"
           />

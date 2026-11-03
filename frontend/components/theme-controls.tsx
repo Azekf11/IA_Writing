@@ -82,7 +82,8 @@ export function ThemeControls() {
         <div
           role="dialog"
           aria-label={t("label")}
-          className="absolute right-0 z-20 mt-2 w-64 rounded-lg border border-border bg-surface p-3 shadow-card"
+          // On a phone the header wraps and this button can sit anywhere: centred on the screen
+          className="absolute right-0 z-20 mt-2 w-64 rounded-lg border border-border bg-surface p-3 shadow-card max-sm:fixed max-sm:inset-x-0 max-sm:mx-auto"
         >
           <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted">
             {t("mode")}

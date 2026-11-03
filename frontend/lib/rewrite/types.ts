@@ -13,13 +13,19 @@ export type Edit = {
 // Authors whose excerpts guided the rewrite, shown to the user for transparency
 export type ReferenceCredit = { author: string; title: string };
 
-export type RewriteResponse = { edits: Edit[]; references: ReferenceCredit[] };
+export type RewriteResponse = {
+  edits: Edit[];
+  references: ReferenceCredit[];
+  // Only a stream can end early and still have edits to show
+  partial?: boolean;
+};
 
 // Stable codes: the UI maps each one to a translated message
 export type ErrorCode =
   | "invalid_request"
   | "unauthorized"
   | "quota_exceeded"
+  | "global_quota_exceeded"
   | "too_many_requests"
   | "not_configured"
   | "refused"

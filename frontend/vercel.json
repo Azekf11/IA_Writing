@@ -1,4 +1,10 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "regions": ["dub1"]
+  "regions": ["dub1"],
+  "functions": {
+    "app/api/rewrite/route.ts": {
+      "maxDuration": 60,
+      "supportsCancellation": true
+    }
+  }
 }
