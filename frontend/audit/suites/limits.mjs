@@ -2,8 +2,10 @@
 // Every way an attempt can end is checked against the database: how its ticket closed, whether
 // it stayed counted, and what reached the history. Uses fresh users so one check cannot spoil
 // another.
+import { request as httpRequest } from "node:http";
 import { openPage } from "../browser.mjs";
 import {
+  accessToken,
   check,
   closedAs,
   createUser,
@@ -102,6 +104,171 @@ export async function run(t) {
           mock.received.length === 0,
           "the model was called for bad input",
         );
+      },
+    );
+
+    await check(
+      "limits",
+      "the 40 000 byte bound counts bytes: multibyte text past it is refused before the session",
+      async () => {
+        mock.reset();
+        const body = (chars) =>
+          JSON.stringify({ text: "é".repeat(chars), locale: "en" });
+        // No session at all: a 413 here cannot have come from anything after the session check
+        const anonymous = await t.browser.newContext();
+        const refused = await anonymous.request.post(`${t.base}/api/rewrite`, {
+          data: body(20_100),
+          headers: { "content-type": "application/json" },
+        });
+        expect(refused.status() === 413, `over -> ${refused.status()}`);
+        // The same characters under the bound get as far as the next check
+        const under = await anonymous.request.post(`${t.base}/api/rewrite`, {
+          data: body(19_000),
+          headers: { "content-type": "application/json" },
+        });
+        expect(under.status() === 400, `under -> ${under.status()}`);
+        await anonymous.close();
+        expect(mock.received.length === 0, "the model was called");
+      },
+    );
+
+    await check(
+      "limits",
+      "a body sent in pieces with no length is answered 413 while it is still being sent",
+      async () => {
+        mock.reset();
+        const { hostname, port } = new URL(t.base);
+        const chunk = Buffer.alloc(16_384, "x");
+        const { status, sent } = await new Promise((resolve, reject) => {
+          let sent = 0;
+          let timer;
+          const request = httpRequest(
+            {
+              hostname,
+              port,
+              path: "/api/rewrite",
+              method: "POST",
+              headers: { "content-type": "application/json" },
+            },
+            (response) => {
+              clearInterval(timer);
+              response.resume();
+              resolve({ status: response.statusCode, sent });
+              request.destroy();
+            },
+          );
+          request.on("error", (error) => {
+            clearInterval(timer);
+            reject(error);
+          });
+          timer = setInterval(() => {
+            if (sent >= 4_000_000) {
+              clearInterval(timer);
+              request.end();
+              return;
+            }
+            sent += chunk.length;
+            request.write(chunk);
+          }, 5);
+        });
+        expect(status === 413, `status ${status}`);
+        expect(sent < 1_000_000, `the server let ${sent} bytes through`);
+        expect(mock.received.length === 0, "the model was called");
+        return `answered after ${sent} bytes sent`;
+      },
+    );
+
+    await check(
+      "security",
+      "a session's token reaches no quota function, no corpus and no history write; the route does",
+      async () => {
+        mock.reset();
+        const direct = await member("direct");
+        const token = await accessToken(env, direct.user);
+        const account = direct.user.id;
+        const reservation = crypto.randomUUID();
+        const post = (path, body) =>
+          fetch(`${env.API_URL}/rest/v1/${path}`, {
+            method: "POST",
+            headers: {
+              apikey: env.PUBLISHABLE_KEY,
+              Authorization: `Bearer ${token}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify(body),
+          });
+        const vector = `[${Array.from({ length: 256 }, (_, i) => (i ? 0 : 1)).join(",")}]`;
+        for (const [name, args] of [
+          ["reserve_quota", {}],
+          ["reserve_quota", { account }],
+          ["start_rewrite", { account, reservation }],
+          ["finish_rewrite", { account, reservation, outcome: "failed" }],
+          ["release_quota", { account, reservation }],
+          ["read_style_passages", { reservation }],
+        ]) {
+          const response = await post(`rpc/${name}`, args);
+          expect(
+            [403, 404].includes(response.status),
+            `${name} -> ${response.status}`,
+          );
+        }
+        const forged = await post("rewrites", {
+          user_id: account,
+          original: "Never rewritten by the site.",
+          edit_count: 999,
+          locale: "en",
+        });
+        expect(forged.status === 403, `insert -> ${forged.status}`);
+        expect((await getUsage(env, direct.user)) === 0, "something counted");
+        expect(
+          (await historyRows(env, direct.user)).length === 0,
+          "a row was written",
+        );
+
+        // The same session, through the route, against the simulated model
+        const events = await stream(direct.ctx, TEXT);
+        expect(events.at(-1).type === "done", "the route did not finish");
+        await settled(direct.user, 0, "succeeded", 1);
+
+        // The corpus, with a ticket the search would serve. It answers any other ticket with a
+        // 403 of its own, so only this call shows that the grant is gone.
+        const server = async (name, args) => {
+          const response = await fetch(`${env.API_URL}/rest/v1/rpc/${name}`, {
+            method: "POST",
+            headers: {
+              apikey: env.SECRET_KEY,
+              Authorization: `Bearer ${env.SECRET_KEY}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify(args),
+          });
+          expect(response.ok, `${name} as the server -> ${response.status}`);
+          return response.json();
+        };
+        const live = await server("reserve_quota", { account });
+        try {
+          const started = await server("start_rewrite", {
+            account,
+            reservation: live,
+          });
+          expect(started === true, "the ticket did not start");
+          const search = await post("rpc/search_style_passages", {
+            account,
+            reservation: live,
+            query_embedding: vector,
+            match_lang: "en",
+          });
+          expect(
+            search.status === 403,
+            `search_style_passages -> ${search.status}`,
+          );
+        } finally {
+          await server("finish_rewrite", {
+            account,
+            reservation: live,
+            outcome: "cancelled",
+          });
+        }
       },
     );
 
