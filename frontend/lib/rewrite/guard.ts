@@ -1,6 +1,9 @@
+import { sameAttribution } from "./attribution";
 import { plainTypography } from "./locate";
+import { flipsNegation } from "./negation";
 import { sameNumbers } from "./numbers";
 import type { RawEdit } from "./schema";
+import { sameUnits } from "./units";
 
 // Most edits one answer may carry: a longer list is noise, and costs the user a long review
 export const MAX_EDITS = 40;
@@ -13,6 +16,9 @@ export type DropReason =
   | "too_long"
   | "span_too_long"
   | "numbers_changed"
+  | "units_changed"
+  | "figures_swapped"
+  | "negation_changed"
   | "markup"
   | "too_many";
 
@@ -30,9 +36,14 @@ export function whyDrop(edit: RawEdit): DropReason | null {
     return "too_long";
   }
   if (MARKUP.test(edit.replacement)) return "markup";
-  // Rewording must not touch the numbers: the same ones in, the same ones out, in any order.
-  // This catches changed figures only; it cannot see a change of meaning around them.
-  if (!sameNumbers(edit.original, edit.replacement)) return "numbers_changed";
+  // Rewording must not touch the numbers: the same ones in, the same ones out, in any order. Each
+  // keeps its unit and stays with its name, and a denial stays. These read words next to figures,
+  // not meaning: docs/ARCHITECTURE.md lists what they cannot see.
+  const { original, replacement } = edit;
+  if (!sameNumbers(original, replacement)) return "numbers_changed";
+  if (!sameUnits(original, replacement)) return "units_changed";
+  if (!sameAttribution(original, replacement)) return "figures_swapped";
+  if (flipsNegation(original, replacement)) return "negation_changed";
   return null;
 }
 

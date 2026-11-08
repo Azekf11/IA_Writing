@@ -903,6 +903,31 @@ describe("locateEdits", () => {
     });
   });
 
+  describe("a quote that holds a figure's unit, without its digits", () => {
+    it.each([
+      ["a budget of 3 million here", "million", "billion"],
+      ["un budget de 3 millions ici", "millions", "milliards"],
+      ["a 5 km walk", "km", "miles"],
+      ["ça coûte 40 euros", "euros", "dollars"],
+      ["en 3 jours", "jours", "semaines"],
+      ["a budget of 3 million here", "million", ""],
+    ])(
+      "drops it when the figure would read otherwise: %s",
+      (text, quote, by) => {
+        expect(locateEdits(text, [edit(quote, by)])).toEqual([]);
+      },
+    );
+
+    it.each([
+      ["a 5 km walk", "km", "kilometres"],
+      ["ça coûte 40 euros", "euros", "€"],
+      ["a 5 km walk", "walk", "hike"],
+      ["a budget of 3 million here", "here", "there"],
+    ])("keeps it when the figure reads the same: %s", (text, quote, by) => {
+      expect(locateEdits(text, [edit(quote, by)])).toHaveLength(1);
+    });
+  });
+
   describe("a quote that stops inside a figure", () => {
     it.each([
       ["a minus", "Revenue fell by -5% in 2023.", "fell by -", "fell by "],
@@ -998,6 +1023,30 @@ describe("locateEdits", () => {
       ).toBe("It was 1,200 dollars.");
     });
 
+    it("takes an apostrophe for a thousands mark only after a digit", () => {
+      expect(
+        accepted("Il gagne près d'1,5 million.", edit("près d'", "environ ")),
+      ).toBe("Il gagne environ 1,5 million.");
+    });
+
+    it("keeps a scale word replaced where no figure stands before it", () => {
+      expect(
+        accepted(
+          "In 2020 millions of people lost their jobs.",
+          edit("millions of people", "many people"),
+        ),
+      ).toBe("In 2020 many people lost their jobs.");
+    });
+
+    // A limit: each edit is judged on its own
+    it("cannot see two edits that join two figures only together", () => {
+      const text = "Between 5 or and 300 people came.";
+      const edits = locateEdits(text, [edit("or", ""), edit("and", "")]);
+      expect(applyEdits(text, edits, decide(edits))).toBe(
+        "Between 5 300 people came.",
+      );
+    });
+
     it.each([
       [
         "a comma after a figure",
@@ -1015,7 +1064,7 @@ describe("locateEdits", () => {
         "a whole figure",
         "It cost 1,200 dollars.",
         "1,200 dollars",
-        "1,200 euros",
+        "a full 1,200 dollars",
       ],
       [
         "words before a figure",
@@ -1025,6 +1074,241 @@ describe("locateEdits", () => {
       ],
     ])("keeps %s", (_case, text, quote, replacement) => {
       expect(locateEdits(text, [edit(quote, replacement)])).toHaveLength(1);
+    });
+  });
+
+  describe("the figures around an edit, in a long text", () => {
+    const far = "Word ".repeat(100);
+
+    it("sees a unit that a quote takes from the figure before it", () => {
+      const text = `${far}It cost 3 million here. ${far}`;
+      expect(locateEdits(text, [edit("million", "thousand")])).toEqual([]);
+    });
+
+    it("sees a figure that a deletion joins to the next one", () => {
+      const text = `${far}Between 5 and 300 people. ${far}`;
+      expect(accepted(text, edit("and", ""))).toBeNull();
+    });
+
+    it("is not held back by figures it leaves alone", () => {
+      const text = `1 2 3 ${far}crucial step ${far}4 5 6`;
+      expect(locateEdits(text, [edit("crucial", "key")])).toHaveLength(1);
+    });
+  });
+
+  describe("a dash after a word separates", () => {
+    it.each([
+      [
+        "The line works\u201412 of them run daily.",
+        "\u2014",
+        ", ",
+        "The line works, 12 of them run daily.",
+      ],
+      [
+        "The line works\u201412 of them run daily.",
+        "works\u2014",
+        "works: ",
+        "The line works: 12 of them run daily.",
+      ],
+      [
+        "One figure stands out\u201412%.",
+        "\u2014",
+        ": ",
+        "One figure stands out: 12%.",
+      ],
+      [
+        "Le bilan est clair\u201412 lignes rouvrent.",
+        "\u2014",
+        " : ",
+        "Le bilan est clair : 12 lignes rouvrent.",
+      ],
+    ])("in %s, %s can go", (text, quote, by, result) => {
+      expect(accepted(text, edit(quote, by))).toBe(result);
+    });
+
+    it("but stays a sign after a space", () => {
+      expect(
+        locateEdits("It fell by -5% in 2023.", [edit("by -", "by ")]),
+      ).toEqual([]);
+    });
+  });
+
+  describe("every mark of a figure holds the quote back", () => {
+    it.each([
+      ["It fell by -5% in 2023.", "by -", "by \u2212"],
+      ["It fell by \u22125% in 2023.", "by \u2212", "by -"],
+      ["It costs $40 now.", "costs $", "was $"],
+      ["It cost 1,200 dollars.", "cost 1,", "was 1,"],
+      ["The rate is 3.5 today.", "is 3.", "was 3."],
+      ["Open at 10:30 today.", "at 10:", "by 10:"],
+      ["Signed on 12/03 today.", "on 12/", "by 12/"],
+      ["It cost 1'200 dollars.", "cost 1'", "was 1'"],
+      ["It cost 1\u2019200 dollars.", "cost 1\u2019", "was 1\u2019"],
+      ["Sales rose 12% in 2019.", "% in", "% by"],
+      ["Up 5\u2030 in 2019.", "\u2030 in", "\u2030 by"],
+      ["It cost 5$ in all.", "$ in", "$ at"],
+      ["Open at 10:30 today.", ":30 today", ":30 now"],
+      ["A rate of 3.5 today.", ".5 today", ".5 now"],
+      ["the A320 flew", "A", "B"],
+      ["the A320 flew", "A3", "B3"],
+    ])(
+      "in %s, %s stops inside, and the figure reads the same after",
+      (text, quote, by) => {
+        expect(locateEdits(text, [edit(quote, by)])).toEqual([]);
+      },
+    );
+
+    it.each([
+      ["Rate 3.5 today. Then.", ".", "!", "Rate 3.5 today! Then."],
+      ["Cost 1,200 dollars, in all.", ",", ";", "Cost 1,200 dollars; in all."],
+      ["At 10:30 sharp: go.", ":", ";", "At 10:30 sharp; go."],
+      [
+        "From 5-10 people - maybe.",
+        "-",
+        "\u2014",
+        "From 5-10 people \u2014 maybe.",
+      ],
+      ["On 12/03, and/or later.", "/", " ", "On 12/03, and or later."],
+      ["Cost 1'200 it's said.", "'", "\u2019", "Cost 1'200 it\u2019s said."],
+      [
+        "Cost 1\u2019200 it\u2019s said.",
+        "\u2019",
+        "'",
+        "Cost 1\u2019200 it's said.",
+      ],
+      [
+        "Up 12% in the % column.",
+        "%",
+        "percent",
+        "Up 12% in the percent column.",
+      ],
+      [
+        "Up 5\u2030 in the \u2030 column.",
+        "\u2030",
+        "%",
+        "Up 5\u2030 in the % column.",
+      ],
+      [
+        "It cost 5$ in the $ column.",
+        "$",
+        "dollar",
+        "It cost 5$ in the dollar column.",
+      ],
+    ])("%s takes the next %s", (text, quote, by, result) => {
+      expect(accepted(text, edit(quote, by))).toBe(result);
+    });
+
+    it.each([
+      ["It costs $5 a month.", "$5 a month", "$5 monthly"],
+      ["It fell -5% then.", "-5% then", "-5% later"],
+      ["A rate of .5 today.", ".5 today", ".5 now"],
+    ])("%s keeps %s", (text, quote, by) => {
+      expect(locateEdits(text, [edit(quote, by)])).toHaveLength(1);
+    });
+
+    it("an elision and a curly opening quote", () => {
+      expect(
+        accepted(
+          "Il gagne pr\u00e8s d\u20191,5 million.",
+          edit("pr\u00e8s d\u2019", "environ "),
+        ),
+      ).toBe("Il gagne environ 1,5 million.");
+      expect(
+        locateEdits("un \u2018mot\u2019 ici", [edit("'mot'", "terme")]),
+      ).toHaveLength(1);
+    });
+  });
+
+  describe("the spacing marks, one by one", () => {
+    it.each([
+      ["See [1]\u2014and more.", "See [1] and more."],
+      ["See {1}\u2014and more.", "See {1} and more."],
+      [
+        "He said \u2018no\u2019\u2014and left.",
+        "He said \u2018no\u2019 and left.",
+      ],
+      ["Up 5\u2030\u2014a record.", "Up 5\u2030 a record."],
+      ["It works\u2014[and fast].", "It works [and fast]."],
+      ["It works\u2014{and fast}.", "It works {and fast}."],
+      ["He said\u2014\u2018never\u2019.", "He said \u2018never\u2019."],
+      ["Il dit\u2014\u00ab non \u00bb.", "Il dit \u00ab non \u00bb."],
+      ["Dijo\u2014\u00bfcu\u00e1ndo?", "Dijo \u00bfcu\u00e1ndo?"],
+      ["Dijo\u2014\u00a1ya!", "Dijo \u00a1ya!"],
+    ])("%s keeps a space", (text, result) => {
+      expect(accepted(text, edit("\u2014", " "))).toBe(result);
+    });
+
+    it.each([
+      ["It works [really well].", "really", "It works [well]."],
+      ["It works {really well}.", "really", "It works {well}."],
+      [
+        "Il dit \u00abreally bien\u00bb ici.",
+        "really",
+        "Il dit \u00abbien\u00bb ici.",
+      ],
+      [
+        "He said \u2018really well\u2019 twice.",
+        "really",
+        "He said \u2018well\u2019 twice.",
+      ],
+      ["He said 'really well' twice.", "really", "He said 'well' twice."],
+      ["Dijo \u00bfreally bien?", "really", "Dijo \u00bfbien?"],
+      ["Dijo \u00a1really bien!", "really", "Dijo \u00a1bien!"],
+      ["A great idea indeed\u2026", "indeed", "A great idea\u2026"],
+      ["It works [well indeed].", "indeed", "It works [well]."],
+      ["It works {well indeed}.", "indeed", "It works {well}."],
+      [
+        "He said \u2018well indeed\u2019 twice.",
+        "indeed",
+        "He said \u2018well\u2019 twice.",
+      ],
+      ["He said 'well indeed' twice.", "indeed", "He said 'well' twice."],
+      ["a half-baked idea", "baked", "a half- idea"],
+      ["and/or more", "or", "and/ more"],
+    ])("deleting from %s", (text, quote, result) => {
+      expect(accepted(text, edit(quote, ""))).toBe(result);
+    });
+
+    it.each([
+      ["Done . Next", " .", ".", "Done. Next"],
+      ["Done ; Next", " ;", ";", "Done; Next"],
+      ["Done : Next", " :", ":", "Done: Next"],
+      ["Done ! Next", " !", "!", "Done! Next"],
+      ["Done ? Next", " ?", "?", "Done? Next"],
+      ["Done \u2026 Next", " \u2026", "\u2026", "Done\u2026 Next"],
+      ["(done ) next", " )", ")", "(done) next"],
+      ["[done ] next", " ]", "]", "[done] next"],
+      ["{done } next", " }", "}", "{done} next"],
+      ["\u201cdone \u201d next", " \u201d", "\u201d", "\u201cdone\u201d next"],
+      ["\u00abdone \u00bb next", " \u00bb", "\u00bb", "\u00abdone\u00bb next"],
+      ["l 'ami", " '", "'", "l'ami"],
+      ["l \u2019ami", " \u2019", "\u2019", "l\u2019ami"],
+      ["un mot", " mot", "\u2212mot", "un\u2212mot"],
+      ["de ami", "de ", "d\u2019", "d\u2019ami"],
+      ["see one", "see ", "see [", "see [one"],
+      ["see one", "see ", "see {", "see {one"],
+      ["dijo que", "dijo ", "dijo \u00bf", "dijo \u00bfque"],
+      ["dijo ya", "dijo ", "dijo \u00a1", "dijo \u00a1ya"],
+      ["said one", "said ", "said \u201c", "said \u201cone"],
+      ["said one", "said ", "said \u2018", "said \u2018one"],
+      ["One.  Two", "  ", " ", "One. Two"],
+    ])("in %s, %s decides its own spacing", (text, quote, by, result) => {
+      expect(accepted(text, edit(quote, by))).toBe(result);
+    });
+
+    it.each(["[", "{", "\u00bf", "\u00a1", "\u201c", "\u2018"])(
+      "no space after %s",
+      (mark) => {
+        expect(accepted(`it ${mark} very good`, edit(" very", "great"))).toBe(
+          `it ${mark}great good`,
+        );
+      },
+    );
+
+    it.each([".", "\u2026", ")", "]", "}"])("no space before %s", (mark) => {
+      expect(accepted(`it is very ${mark} next`, edit("very ", "great"))).toBe(
+        `it is great${mark} next`,
+      );
     });
   });
 

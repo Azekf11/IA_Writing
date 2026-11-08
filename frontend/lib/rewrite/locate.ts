@@ -1,6 +1,7 @@
 import { sameNumbers } from "./numbers";
 import type { RawEdit } from "./schema";
 import type { Edit } from "./types";
+import { sameUnits } from "./units";
 
 type Range = [start: number, end: number];
 
@@ -28,8 +29,15 @@ const FIGURE_MARK = /[\p{Pd}\p{Sc}\u2212,.:/%\u2030'\u2019]/u;
 const UNIT_MARK = /[\p{Sc}%\u2030]/u;
 const isDigit = (ch: string | undefined) => ch !== undefined && /\d/.test(ch);
 
+// An apostrophe only groups digits: "1'200", not the elision in "d'1,5". A dash after a letter
+// separates: "works\u201412".
+const marksFigure = (text: string, at: number) =>
+  FIGURE_MARK.test(text[at] ?? "") &&
+  (!/['\u2019]/.test(text[at]) || isDigit(text[at - 1])) &&
+  !(/\p{Pd}/u.test(text[at]) && /\p{L}/u.test(text[at - 1] ?? ""));
+
 const cutsFigure = (text: string, [start, end]: Range) =>
-  (isDigit(text[end]) && FIGURE_MARK.test(text[end - 1] ?? "")) ||
+  (isDigit(text[end]) && marksFigure(text, end - 1)) ||
   (isDigit(text[start - 1]) &&
     (UNIT_MARK.test(text[start] ?? "") ||
       (FIGURE_MARK.test(text[start] ?? "") && isDigit(text[start + 1]))));
@@ -279,9 +287,10 @@ export function locateOne(
     range = keepOuterSpace(text, range, edit);
   }
   // The guard only saw the quote. This is the text the reader would get, and it must read the same
-  // figures: the quote can leave a figure's digits out, or the deletion join two of them.
-  const result = text.slice(0, range[0]) + replacement + text.slice(range[1]);
-  if (!sameNumbers(text, result)) return null;
+  // figures: the quote can leave a figure's digits out, the deletion join two of them, or the
+  // quote be the unit alone ("million" next to "3").
+  const after = text.slice(0, range[0]) + replacement + text.slice(range[1]);
+  if (!sameNumbers(text, after) || !sameUnits(text, after)) return null;
   taken.push(range);
   return {
     ...edit,

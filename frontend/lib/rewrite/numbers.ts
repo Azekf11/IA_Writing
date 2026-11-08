@@ -1,15 +1,19 @@
 // A written number, compared as a whole: digits with their thousands groups (1 200 | 1,234,567)
-// and decimal part (3.5 | 2,5 | .5), parts joined into a date or a time (12/03/2024 | 10:30), a
-// minus sign and a percent sign. So 3.5 and 35, -5 and 5, 12/03 and 03/12, or 12% and 12 all
-// differ. A hyphen or a dash after a digit, a letter, a bracket or a unit that follows a digit
-// separates, so "2019-2021" and "5%-10%" can be reworded; anywhere else it is a sign, also ahead
-// of a currency symbol (-$5).
+// and decimal part (3.5 | 2,5 | .5), parts joined into a date or a time (12/03/2024 | 2024-03-12 |
+// 10:30), a minus sign and a percent sign. So 3.5 and 35, -5 and 5, 12/03 and 03/12, or 12% and 12 all
+// differ, and "12 percent", "12-per-cent", "12 pct" or "12 pour cent" read as 12%. A hyphen or a dash after a digit, a letter,
+// a bracket or a unit that follows a digit separates, so "2019-2021" and "5%-10%" can be reworded,
+// except in a date with its year first or last (2024-03-12 | 12-03-2024); anywhere else it is a sign,
+// also ahead of a currency symbol (-$5).
 const INT = String.raw`\d{1,3}(?:[,.\p{Zs}'\u2019]\d{3})+(?!\d)|\d+`;
 const PART = String.raw`(?:(?:${INT})(?:[.,]\d+)?|(?<![\p{L}\p{N}])[.,]\d+)`;
 const SIGN = String.raw`(?<![\p{L}\p{N})\]])(?<!\p{N}\s?[%\u2030°\p{Sc}'\u2019"])[\p{Pd}\u2212](?:\p{Sc}\s?)?`;
+const PERCENT_WORD = String.raw`[\s\p{Pd}]?(?:p(?:er|our)[\s\p{Pd}]?cents?|pct)(?!\p{L})`;
+const ENDS_IN_PERCENT_WORD = new RegExp(`${PERCENT_WORD}$`, "iu");
+const DATE = String.raw`(?<![\p{L}\p{N}])(?:\d{4}-\d{1,2}-\d{1,2}|\d{1,2}-\d{1,2}-\d{4})(?!\p{N})`;
 const NUMBER = new RegExp(
-  String.raw`(?:${SIGN})?${PART}(?:[/:]${PART})*(?:\s?[%\u2030])?`,
-  "gu",
+  String.raw`${DATE}|(?:${SIGN})?${PART}(?:[/:]${PART})*(?:\s?[%\u2030]|${PERCENT_WORD})?`,
+  "giu",
 );
 const PART_SHAPE = new RegExp(String.raw`^(${INT})(?:[.,](\d+))?$`, "u");
 
@@ -47,21 +51,33 @@ function canonicalPart(part: string): string {
 
 function canonical(number: string): string {
   const sign = /^[\p{Pd}\u2212]/u.test(number) ? "-" : "";
-  const percent = /[%\u2030]$/.exec(number)?.[0] ?? "";
+  const word = ENDS_IN_PERCENT_WORD.exec(number)?.[0];
+  const percent = word ? "%" : (/[%\u2030]$/.exec(number)?.[0] ?? "");
   const body = number
-    .slice(sign.length, number.length - percent.length)
+    .slice(sign.length, number.length - (word ?? percent).length)
     .replace(/^\p{Sc}\s?/u, "")
     .trimEnd();
-  // Even pieces are numbers, odd pieces the marks that join them
+  // Even pieces are numbers, odd pieces the marks that join them. Only a date holds a hyphen here.
   const joined = body
-    .split(/([/:])/)
+    .split(/([/:-])/)
     .map((piece, i) => (i % 2 ? piece : canonicalPart(piece)))
     .join("");
   return sign + joined + percent;
 }
 
+// Every number in a text: how it compares, as written and where it stands
+export const figuresIn = (value: string) =>
+  Array.from(value.matchAll(NUMBER), (match) => ({
+    value: canonical(match[0]),
+    written: match[0],
+    start: match.index,
+    end: match.index + match[0].length,
+  }));
+
 const numbersOf = (value: string) =>
-  (value.match(NUMBER) ?? []).map(canonical).sort();
+  figuresIn(value)
+    .map((figure) => figure.value)
+    .sort();
 
 // Whether two texts read the same figures, in any order
 export function sameNumbers(a: string, b: string): boolean {
