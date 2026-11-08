@@ -14,6 +14,7 @@
 //   REVERSE    writes its edits last to first
 //   12%        adds an edit that changes the number
 import http from "node:http";
+import { fileURLToPath } from "node:url";
 
 export function startMockAnthropic(port) {
   const received = [];
@@ -93,6 +94,15 @@ export function startMockAnthropic(port) {
         close: () => new Promise((r) => server.close(r)),
       }),
     ),
+  );
+}
+
+// `npm run stand-in`: on its own, for a local demo without an API key (see the root README)
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
+  const PORT = 4310;
+  await startMockAnthropic(PORT);
+  console.log(
+    `Stand-in for the model on http://127.0.0.1:${PORT}. Not Claude.`,
   );
 }
 
