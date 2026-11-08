@@ -14,7 +14,7 @@ from pathlib import Path
 from huggingface_hub import snapshot_download
 from safetensors.numpy import load_file
 
-from aiwd.style.embed import DIM, MODEL_ID, TOKENIZER_FILE, write_artifacts
+from aiwd.style.embed import DIM, MODEL_ID, MODEL_REVISION, TOKENIZER_FILE, write_artifacts
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -25,7 +25,9 @@ def main() -> None:
     parser.add_argument("--dim", type=int, default=DIM)
     args = parser.parse_args()
 
-    source = Path(snapshot_download(MODEL_ID, allow_patterns=["0_StaticEmbedding/*"]))
+    source = Path(
+        snapshot_download(MODEL_ID, revision=MODEL_REVISION, allow_patterns=["0_StaticEmbedding/*"])
+    )
     weights = load_file(str(source / "0_StaticEmbedding/model.safetensors"))["embedding.weight"]
     tokenizer = source / "0_StaticEmbedding" / TOKENIZER_FILE
     meta = write_artifacts(Path(args.out), weights, tokenizer, args.dim)
