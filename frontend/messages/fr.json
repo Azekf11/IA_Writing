@@ -137,6 +137,7 @@
     "access": "Les autres utilisateurs ne peuvent rien en lire. Le responsable du site le peut : votre texte est stocké tel quel, sans chiffrement qui le lui cacherait. Le site est hébergé par Vercel et les données sont stockées chez Supabase, dont le service de connexion peut aussi enregistrer votre adresse IP et votre navigateur.",
     "aiTitle": "Traitement par IA",
     "ai": "Votre texte est envoyé à Anthropic (Claude) pour produire les suggestions, avec votre extrait d'écriture si vous en ajoutez un et jusqu'à trois extraits du corpus de style. Anthropic traite ces données selon ses propres conditions. N'envoyez pas de texte que vous n'avez pas le droit de partager.",
+    "aiWithoutExcerpts": "Votre texte est envoyé à Anthropic (Claude) pour produire les suggestions, avec votre extrait d'écriture si vous en ajoutez un. Anthropic traite ces données selon ses propres conditions. N'envoyez pas de texte que vous n'avez pas le droit de partager.",
     "limitsTitle": "Limites",
     "limits": "Les suggestions sont des corrections de style. Elles ne changent pas l'auteur d'un texte, et cet outil ne détecte pas les textes écrits par une IA."
   },

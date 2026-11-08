@@ -6,6 +6,7 @@ import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
 import { routing } from "@/i18n/routing";
 import { alternatesFor } from "@/lib/site";
+import { referencesEnabled } from "@/lib/style/switch";
 
 const SECTIONS = ["data", "access", "ai", "limits"] as const;
 
@@ -43,7 +44,13 @@ export default async function PrivacyPage({
           className="flex flex-col gap-2 rounded-xl border border-border bg-surface p-5"
         >
           <h2 className="text-lg font-medium">{t(`${section}Title`)}</h2>
-          <p className="leading-relaxed text-muted">{t(section)}</p>
+          <p className="leading-relaxed text-muted">
+            {t(
+              section === "ai" && !referencesEnabled()
+                ? "aiWithoutExcerpts"
+                : section,
+            )}
+          </p>
         </section>
       ))}
       <SiteFooter />
