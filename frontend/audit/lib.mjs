@@ -344,6 +344,9 @@ export async function seedPassages(env) {
   });
 }
 
+export const hasPassages = async (env) =>
+  (await service(env, "/rest/v1/style_passages?select=id&limit=1")).length > 0;
+
 export const removePassages = (env) =>
   service(env, "/rest/v1/style_passages?id=like.audit-*", {
     method: "DELETE",

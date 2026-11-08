@@ -1,5 +1,7 @@
 // Who can read and change what, tested through the public API on a local stack: row-level
-// security on the history, and tables that no browser may reach.
+// security on the history, and tables that no browser may reach. The route writes the history with
+// the secret key, so these tests set their scene with it too. Where 20261107000000 changes the
+// answer, they read whether it has run; access.test.mjs covers what it closes.
 // Run: npm run test:db   (from frontend/; see README)
 import assert from "node:assert/strict";
 import { after, before, describe, it } from "node:test";
@@ -20,6 +22,15 @@ let b;
 const history = (user, path = "", options = {}) =>
   api.call(`/rest/v1/rewrites${path}`, { token: user?.token, ...options });
 
+// What the route does once a rewrite is done
+const save = (row) =>
+  api.service("/rest/v1/rewrites", {
+    method: "POST",
+    body: row,
+    prefer: "return=representation",
+  });
+
+// What the app did before this version, with the user's own session
 const write = (user, row) =>
   history(user, "", {
     method: "POST",
@@ -27,11 +38,24 @@ const write = (user, row) =>
     prefer: "return=representation",
   });
 
+const reserve = (user) =>
+  api.service("/rest/v1/rpc/reserve_quota", {
+    method: "POST",
+    body: { account: user.id },
+  });
+
 // A refusal from the database itself, not a missing route
 const denied = (response) => {
   assert.ok([401, 403].includes(response.status), `status ${response.status}`);
   assert.equal(sqlState(response), "42501");
 };
+
+// Whether 20261107000000 has run. Until it has, the earlier functions stay open to signed-in users
+// and the history takes their inserts, so the app already deployed keeps working through the rollout.
+const directAccessClosed = () =>
+  psql(
+    "select count(*) from supabase_migrations.schema_migrations where version = '20261107000000'",
+  )[0] === "1";
 
 before(async () => {
   a = await createUser(api, "rls-a");
@@ -45,16 +69,19 @@ after(async () => {
 describe("history: each user sees and changes only their own rows", () => {
   let row;
 
-  it("lets a user save to their own history", async () => {
-    const saved = await write(a, {
+  it("shows a saved row to its owner", async () => {
+    const saved = await save({
       user_id: a.id,
       original: "hello",
       locale: "en",
     });
     assert.equal(saved.status, 201);
     row = saved.body[0];
+    const seen = await history(a, `?id=eq.${row.id}&select=id,original`);
+    assert.deepEqual(seen.body, [{ id: row.id, original: "hello" }]);
   });
 
+  // By the insert policy until 20261107000000, then because the insert itself is gone
   it("refuses a row written for someone else", async () => {
     const forged = await write(a, {
       user_id: b.id,
@@ -64,14 +91,28 @@ describe("history: each user sees and changes only their own rows", () => {
     denied(forged);
   });
 
-  it("refuses an unknown language and a text over 5000 characters", async () => {
-    const locale = await write(a, {
+  it("takes a user's own row from their session until direct access is closed", async () => {
+    const own = await write(a, {
+      user_id: a.id,
+      original: "own",
+      locale: "en",
+    });
+    if (directAccessClosed()) {
+      denied(own);
+    } else {
+      assert.equal(own.status, 201);
+      await history(a, `?id=eq.${own.body[0].id}`, { method: "DELETE" });
+    }
+  });
+
+  it("refuses an unknown language and a text over 5000 characters, whoever writes", async () => {
+    const locale = await save({
       user_id: a.id,
       original: "x",
       locale: "de",
     });
     assert.equal(sqlState(locale), "23514");
-    const long = await write(a, {
+    const long = await save({
       user_id: a.id,
       original: "a".repeat(5001),
       locale: "en",
@@ -118,8 +159,8 @@ describe("history: each user sees and changes only their own rows", () => {
       original: `row ${i}`,
       locale: "en",
     }));
-    assert.equal((await write(a, rows)).status, 201);
-    const other = await write(b, {
+    assert.equal((await save(rows)).status, 201);
+    const other = await save({
       user_id: b.id,
       original: "someone else's",
       locale: "en",
@@ -140,8 +181,8 @@ describe("history: each user sees and changes only their own rows", () => {
 
   it("removes a user's history and counters with their account", async () => {
     const c = await createUser(api, "rls-cascade");
-    await write(c, { user_id: c.id, original: "keep", locale: "en" });
-    assert.equal((await rpc(api, c, "reserve_quota")).status, 200);
+    await save({ user_id: c.id, original: "keep", locale: "en" });
+    assert.equal((await reserve(c)).status, 200);
     await deleteUser(api, c);
     for (const table of ["rewrites", "usage", "quota_reservations"]) {
       const left = await api.service(
@@ -157,8 +198,22 @@ describe("history: each user sees and changes only their own rows", () => {
 });
 
 describe("usage: readable by its owner, writable by nobody", () => {
+  // The call the app already deployed makes, and gives back when the attempt does not start
+  it("reserves with the user's own token until direct access is closed", async () => {
+    const reserved = await rpc(api, a, "reserve_quota");
+    if (directAccessClosed()) {
+      assert.equal(sqlState(reserved), "PGRST202");
+    } else {
+      assert.equal(reserved.status, 200);
+      const back = await rpc(api, a, "release_quota", {
+        reservation: reserved.body,
+      });
+      assert.equal(back.body, true);
+    }
+  });
+
   it("shows a user their own counter only", async () => {
-    assert.equal((await rpc(api, a, "reserve_quota")).status, 200);
+    assert.equal((await reserve(a)).status, 200);
     const own = await api.call("/rest/v1/usage?select=user_id,count", {
       token: a.token,
     });
@@ -221,8 +276,10 @@ describe("visitors without an account", () => {
     denied(await history(null, "?select=id"));
   });
 
+  // The earlier calls; quota.test.mjs makes the server's. Once they are dropped, the API knows none.
   it("cannot call any quota or search function", async () => {
     const uuid = crypto.randomUUID();
+    const refusal = directAccessClosed() ? "PGRST202" : "42501";
     for (const [name, args] of [
       ["reserve_quota", {}],
       ["start_rewrite", { reservation: uuid }],
@@ -238,7 +295,7 @@ describe("visitors without an account", () => {
       const response = await rpc(api, null, name, args);
       assert.equal(
         sqlState(response),
-        "42501",
+        refusal,
         `${name}: ${JSON.stringify(response.body)}`,
       );
     }
@@ -251,6 +308,26 @@ describe("every privilege browsers hold, read from the database catalog", () => 
   const roles = "(values ('anon'), ('authenticated')) r(role)";
   const kinds =
     "unnest(array['SELECT','INSERT','UPDATE','REFERENCES']) p(priv)";
+  // The server's, and the earlier ones until they are dropped. Named with their arguments, since the
+  // two sets share names; sorted here, since the database's collation orders punctuation its own way.
+  const server = [
+    "finish_rewrite(account uuid, reservation uuid, outcome text)",
+    "release_quota(account uuid, reservation uuid)",
+    "reserve_quota(account uuid)",
+    "search_style_passages(account uuid, reservation uuid, query_embedding vector, match_lang text, match_count integer)",
+    "start_rewrite(account uuid, reservation uuid)",
+  ];
+  const earlier = () =>
+    directAccessClosed()
+      ? []
+      : [
+          "finish_rewrite(reservation uuid, outcome text)",
+          "read_style_passages(reservation uuid)",
+          "release_quota(reservation uuid)",
+          "reserve_quota()",
+          "search_style_passages(reservation uuid, query_embedding vector, match_lang text, match_count integer)",
+          "start_rewrite(reservation uuid)",
+        ];
 
   it("is limited to the history and the user's own counter", () => {
     const rows = psql(`
@@ -263,7 +340,9 @@ describe("every privilege browsers hold, read from the database catalog", () => 
         and has_table_privilege(r.role, c.oid, p.priv)
       group by r.role, c.relname order by 1`);
     assert.deepEqual(rows, [
-      "authenticated rewrites DELETE,INSERT,SELECT",
+      directAccessClosed()
+        ? "authenticated rewrites DELETE,SELECT"
+        : "authenticated rewrites DELETE,INSERT,SELECT",
       "authenticated usage SELECT",
     ]);
   });
@@ -282,37 +361,32 @@ describe("every privilege browsers hold, read from the database catalog", () => 
     assert.deepEqual(rows, []);
   });
 
-  it("runs the six functions as their owner, with no search path to hijack", () => {
+  it("runs every function as its owner, with no search path to hijack", () => {
     const rows = psql(`
-      select p.proname || ' ' || p.prosecdef || ' ' ||
-             coalesce(array_to_string(p.proconfig, ','), 'none')
+      select p.proname || '(' || pg_get_function_identity_arguments(p.oid) || ') ' ||
+             p.prosecdef || ' ' || coalesce(array_to_string(p.proconfig, ','), 'none')
       from pg_proc p join pg_namespace n on n.oid = p.pronamespace
-      where n.nspname = 'public' order by 1`);
-    assert.deepEqual(rows, [
-      'finish_rewrite true search_path=""',
-      'read_style_passages true search_path=""',
-      'release_quota true search_path=""',
-      'reserve_quota true search_path=""',
-      'search_style_passages true search_path=""',
-      'start_rewrite true search_path=""',
-    ]);
+      where n.nspname = 'public'`);
+    assert.deepEqual(
+      rows.sort(),
+      [...server, ...earlier()].map((f) => `${f} true search_path=""`).sort(),
+    );
   });
 
-  it("is limited to the six functions signed-in users need", () => {
+  it("is limited to the earlier functions signed-in users still need, none of the server's", () => {
     const rows = psql(`
-      select p.proname || ' ' ||
+      select p.proname || '(' || pg_get_function_identity_arguments(p.oid) || ') ' ||
              has_function_privilege('authenticated', p.oid, 'execute') || ' ' ||
              has_function_privilege('anon', p.oid, 'execute')
       from pg_proc p join pg_namespace n on n.oid = p.pronamespace
-      where n.nspname = 'public' order by 1`);
-    assert.deepEqual(rows, [
-      "finish_rewrite true false",
-      "read_style_passages true false",
-      "release_quota true false",
-      "reserve_quota true false",
-      "search_style_passages true false",
-      "start_rewrite true false",
-    ]);
+      where n.nspname = 'public'`);
+    assert.deepEqual(
+      rows.sort(),
+      [
+        ...server.map((f) => `${f} false false`),
+        ...earlier().map((f) => `${f} true false`),
+      ].sort(),
+    );
   });
 
   it("has row-level security on every table", () => {

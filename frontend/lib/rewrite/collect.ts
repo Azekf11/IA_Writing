@@ -6,11 +6,13 @@ import type { Edit } from "./types";
 // Applies the same rules as guardEdits + locateEdits, one edit at a time, so an edit can reach
 // the user the moment the model finishes writing it. Ids follow arrival order and never change:
 // a decision made while the model is still writing stays attached to the right edit. The cap
-// counts located edits only, where guardEdits also counts quotes that locateEdits drops later.
+// counts located edits, where guardEdits also counts quotes that locateEdits drops later, and
+// as many refused ones, since each refusal reads the whole text.
 export class EditCollector {
   private taken: [number, number][] = [];
   private kept: Edit[] = [];
   private seen = 0;
+  private refused = 0;
   readonly dropped: Record<string, number> = {};
 
   constructor(private readonly text: string) {}
@@ -19,10 +21,15 @@ export class EditCollector {
   add(raw: RawEdit): Edit | null {
     const reason = whyDrop(raw);
     if (reason) return this.drop(reason);
-    if (this.seen >= MAX_EDITS) return this.drop("too_many");
+    if (this.seen >= MAX_EDITS || this.refused >= MAX_EDITS) {
+      return this.drop("too_many");
+    }
 
     const located = locateOne(this.text, raw, this.taken);
-    if (!located) return this.drop("not_found");
+    if (!located) {
+      this.refused++;
+      return this.drop("not_found");
+    }
 
     const edit: Edit = { id: `edit-${this.seen++}`, ...located };
     this.kept.push(edit);

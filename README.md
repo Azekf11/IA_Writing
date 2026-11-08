@@ -48,25 +48,36 @@ flowchart LR
 ```
 
 There is one deployed app and no server to operate. The Python folder builds the corpus on a laptop;
-no request ever reaches it. Every step of a request, each tool and the reason it was chosen are in
+no request ever reaches it. Every step of a request, the main tools and the reason each was chosen are in
 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 ## Run it locally
 
-You need Node 24, Docker, the Supabase CLI and an Anthropic API key.
+You need Node 24, Docker and the Supabase CLI.
 
 ```bash
 supabase start                 # local Postgres, Auth and a mailbox, with every migration applied
-supabase status -o env         # shows API_URL and PUBLISHABLE_KEY for the next step
+supabase status -o env         # shows API_URL, PUBLISHABLE_KEY and SECRET_KEY for the next step
 cd frontend
-cp .env.example .env.local     # fill in the Anthropic key and the two local Supabase values
+cp .env.example .env.local     # fill in the three local Supabase values, and a model as below
 npm ci
 npm run dev                    # http://localhost:3000
 ```
 
+For the model, choose one:
+
+- **Free and simulated.** Add `ANTHROPIC_API_KEY=not-real` and `ANTHROPIC_BASE_URL=http://127.0.0.1:4310`
+  to `.env.local`, and run `npm run stand-in` in a second terminal. This is a local stand-in, not Claude:
+  it shortens every other sentence to its last words, which shows the path of a request and the review, and
+  says nothing about the quality of real edits. A variable already exported in your shell wins over
+  `.env.local`, so unset any `ANTHROPIC_BASE_URL` or `ANTHROPIC_API_KEY` first.
+- **The real model.** Set `ANTHROPIC_API_KEY` to your own key. An attempt on ordinary prose costs about
+  $0.09 at most ([costs](#costs-security-privacy-and-limits)).
+
 Sign-in emails arrive in the local mailbox at <http://127.0.0.1:54324>. The local database starts
 without a corpus, so rewrites run without style excerpts until you load one
-([docs/STYLE_CORPUS.md](docs/STYLE_CORPUS.md)).
+([docs/STYLE_CORPUS.md](docs/STYLE_CORPUS.md)). To see the vector index without a corpus, see
+[the `EXPLAIN` example](docs/ARCHITECTURE.md#the-index-at-work).
 
 ## Tests
 
@@ -86,19 +97,24 @@ refuse to run against anything but a local stack. To use a stack started from an
 `audit` need network access the first time.
 
 GitHub Actions runs the first two rows, the corpus row and `test:db`. Nothing measures the quality of
-the edits: that would take a separate protocol with real model calls and a cost of its own.
+the edits. [A blind comparison with and without excerpts](docs/research/style-references-comparison.md) is
+written down and has not been run, because it needs real model calls.
 
 ## Costs, security, privacy and limits
 
 **Costs.** Each attempt is one call to Claude, with no automatic retry and at most 8,000 output
-tokens. The database allows 5 attempts per account per UTC day, 2 at once per account, and for all
-accounts together 15 started attempts per day and 300 per month. These limits cap the number of
-calls, not the money: the actual spending cap is the one you set in the Anthropic console. Once an
-attempt has started it stays counted, even if it ends in an error, a refusal or a cancelled stream.
+tokens: about $0.09 at most on ordinary prose, an estimate from the bounds in the code and today's prices,
+[worked out here](docs/ARCHITECTURE.md#what-one-attempt-costs). The database allows 5 attempts per account
+per UTC day, 2 at once per account, and for all accounts together 15 started attempts per day and 300 per
+month. These limits cap the number of calls, not the money: the actual spending cap is the one you set in a
+workspace of its own at Anthropic ([docs/DEPLOY.md](docs/DEPLOY.md#two-separate-ceilings)). Once an attempt
+has started it stays counted, even if it ends in an error, a refusal or a cancelled stream.
 
 **Security.** Nothing paid runs without a signed-in user and a ticket granted by the database. If the
-quota check fails, the model is not called. The limits live in the database, so calling its API
-directly cannot change them. Row-level security limits each history to its owner.
+quota check fails, the model is not called. The quota functions, the corpus search and writing to the
+history are for the server alone, with a secret key that never reaches a browser and the account taken from
+the verified session: a user's token is refused on all of them. Row-level security limits each history to
+its owner, who can read and delete it.
 
 **Privacy.**
 
@@ -111,17 +127,20 @@ directly cannot change them. Row-level security limits each history to its owner
 | Email address       | Yes, your own         | Yes, by Supabase Auth                     | No                |
 | Attempts per day    | No                    | Yes, a counter, and a ticket for each one | No                |
 
-The app sends the browser an excerpt's author and title only; a signed-in user calling the database API
-directly can read up to ten full excerpts per counted attempt. Stored text is not encrypted against the
-project's owner, who can read it. Tickets are kept at least two days and removed at a later accepted
-attempt. Supabase Auth can record an IP address and browser for sign-ins. Logs carry error codes and
-counts, never the text. Anthropic handles what it receives under its own terms.
+The browser only ever gets an excerpt's author and title. With `STYLE_REFERENCES=off`, no excerpt is
+read or sent. Stored text is not encrypted against the project's owner, who can read it. Tickets are kept
+at least two days and removed at a later accepted attempt. Supabase Auth can record an IP address and
+browser for sign-ins. Logs carry one line per attempt, with the model, durations, the state it ended in and
+token counts, along with error codes and counts of dropped edits, and never a text. Anthropic handles what
+it receives under its own terms.
 
 **Limits you should know about.**
 
 - Nobody has measured whether the edits are good, or whether the style excerpts improve them.
-- The automatic checks on an edit compare numbers, length and markup. They cannot see a change of
-  meaning such as a dropped "not"; that is why every edit is shown for review.
+- The automatic checks on an edit compare numbers, units, figures attributed to a name, denials, length
+  and markup. They read words and figures, not meaning: "rose" becoming "fell", or a denial that moves
+  within a sentence, gets through. That is why every edit is shown for review
+  ([what they cannot see](docs/ARCHITECTURE.md#checks-on-the-models-output)).
 - The ceilings protect the budget, not availability: three accounts can use up a day's allowance
   for everyone. The code creates an account for any email address; whether sign-ups are open is a
   console setting.
@@ -134,17 +153,25 @@ counts, never the text. Anthropic handles what it receives under its own terms.
 ## Documentation
 
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md): the request path, every table and function, the quota
-  policy, the tools and their trade-offs, known limits.
-- [docs/DEPLOY.md](docs/DEPLOY.md): deploying and upgrading, and what is set in which console.
-- [docs/STYLE_CORPUS.md](docs/STYLE_CORPUS.md): the corpus, its sources, how to rebuild it, licences.
+  policy, the vector index, the tools and their trade-offs, known limits.
+- [docs/DEPLOY.md](docs/DEPLOY.md): deploying and upgrading, the spending ceilings, pausing, and what is set
+  in which console.
+- [docs/STYLE_CORPUS.md](docs/STYLE_CORPUS.md): the corpus, its sources and their provenance, how to rebuild
+  it, licences.
+- [docs/research/style-references-comparison.md](docs/research/style-references-comparison.md): the protocol
+  for comparing suggestions with and without excerpts, not yet run.
 - [docs/research/detector-evaluation.md](docs/research/detector-evaluation.md): the detector research
   that came first, and why the project moved on.
+- [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md): the notices of the embedded model and the prompt's
+  sources.
 
 ## Licence
 
 No licence file has been added, so all rights are reserved by default. The owner has yet to decide
 whether to publish the code under a licence.
 
-Prompt structure adapted from [blader/humanizer](https://github.com/blader/humanizer) (MIT) and
-Wikipedia's "Signs of AI writing". Credits for the corpus and the embedding model are in
+The editing prompt follows the method of [blader/humanizer](https://github.com/blader/humanizer) (MIT)
+and reuses some of its wording, and credits Wikipedia's "Signs of AI writing". The embedded model is under
+Apache-2.0, with its licence and a notice of the changes in `frontend/data/embedder`. Both are set out in
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md), and credits for the corpus are in
 [docs/STYLE_CORPUS.md](docs/STYLE_CORPUS.md#licences-and-credits).

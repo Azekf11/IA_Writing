@@ -1,5 +1,7 @@
+import { format } from "node:util";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { findReferences, MIN_SIMILARITY } from "@/lib/style/retrieve";
+import { referencesEnabled } from "@/lib/style/switch";
 
 const FRENCH =
   "Il regardait la pluie tomber sur la ville et il pensait à sa mère dans la maison.";
@@ -17,20 +19,18 @@ const row = (author: string, over = {}) => ({
 });
 
 const embedder = { dim: 2, embed: vi.fn(() => [0.6, 0.8]) };
+const ACCOUNT = "account-1";
 const TICKET = "ticket-1";
 
-// `result` is what reading gives back, `search` what the search before it answers
-function fakeSupabase(
-  result: { data?: unknown; error?: { code: string } | null },
-  search: { error?: { code: string } | null } = {},
-) {
-  const rpc = vi.fn((...[name]: [string, unknown?]) => {
-    const answer =
-      name === "read_style_passages"
-        ? { data: null, error: null, ...result }
-        : { data: null, error: null, ...search };
-    return { abortSignal: () => Promise.resolve(answer) };
-  });
+// `result` is what the search answers
+function fakeSupabase(result: {
+  data?: unknown;
+  error?: { code: string; message?: string } | null;
+}) {
+  const answer = { data: null, error: null, ...result };
+  const rpc = vi.fn<
+    (name: string, args?: unknown) => { abortSignal: () => Promise<unknown> }
+  >(() => ({ abortSignal: () => Promise.resolve(answer) }));
   return { client: { rpc } as never, rpc };
 }
 
@@ -55,6 +55,7 @@ describe("findReferences", () => {
     });
     const found = await findReferences(
       client,
+      ACCOUNT,
       TICKET,
       ENGLISH,
       "en",
@@ -68,25 +69,46 @@ describe("findReferences", () => {
       data: [row("A", { similarity: 0.05 }), row("B", { similarity: 0.1 })],
     });
     expect(
-      await findReferences(client, TICKET, ENGLISH, "en", () => embedder),
+      await findReferences(
+        client,
+        ACCOUNT,
+        TICKET,
+        ENGLISH,
+        "en",
+        () => embedder,
+      ),
     ).toEqual([]);
   });
 
   it("searches in the language of the text, not of the interface", async () => {
     const { client, rpc } = fakeSupabase({ data: [] });
-    await findReferences(client, TICKET, FRENCH, "en", () => embedder);
+    await findReferences(client, ACCOUNT, TICKET, FRENCH, "en", () => embedder);
     expect(rpc.mock.calls[0][1]).toMatchObject({ match_lang: "fr" });
   });
 
   it("falls back to the interface language when the text is ambiguous", async () => {
     const { client, rpc } = fakeSupabase({ data: [] });
-    await findReferences(client, TICKET, "Short.", "fr", () => embedder);
+    await findReferences(
+      client,
+      ACCOUNT,
+      TICKET,
+      "Short.",
+      "fr",
+      () => embedder,
+    );
     expect(rpc.mock.calls[0][1]).toMatchObject({ match_lang: "fr" });
   });
 
   it("sends the vector in pgvector text format", async () => {
     const { client, rpc } = fakeSupabase({ data: [] });
-    await findReferences(client, TICKET, ENGLISH, "en", () => embedder);
+    await findReferences(
+      client,
+      ACCOUNT,
+      TICKET,
+      ENGLISH,
+      "en",
+      () => embedder,
+    );
     expect(rpc).toHaveBeenCalledWith(
       "search_style_passages",
       expect.objectContaining({
@@ -95,10 +117,18 @@ describe("findReferences", () => {
     );
   });
 
-  it("searches with the attempt's ticket, which the database allows once", async () => {
+  it("searches once, for the account and the ticket it was given", async () => {
     const { client, rpc } = fakeSupabase({ data: [] });
-    await findReferences(client, TICKET, ENGLISH, "en", () => embedder);
-    expect(rpc).toHaveBeenCalledWith("search_style_passages", {
+    await findReferences(
+      client,
+      ACCOUNT,
+      TICKET,
+      ENGLISH,
+      "en",
+      () => embedder,
+    );
+    expect(rpc).toHaveBeenCalledExactlyOnceWith("search_style_passages", {
+      account: ACCOUNT,
       reservation: TICKET,
       query_embedding: "[0.600000,0.800000]",
       match_lang: "en",
@@ -106,63 +136,32 @@ describe("findReferences", () => {
     });
   });
 
-  it("reads what the search found, with the same ticket", async () => {
-    const { client, rpc } = fakeSupabase({ data: [] });
-    await findReferences(client, TICKET, ENGLISH, "en", () => embedder);
-    expect(rpc.mock.calls.map(([name]) => name)).toEqual([
-      "search_style_passages",
-      "read_style_passages",
-    ]);
-    expect(rpc).toHaveBeenLastCalledWith("read_style_passages", {
-      reservation: TICKET,
-    });
-  });
-
-  it("reads nothing when the search failed", async () => {
-    const { client, rpc } = fakeSupabase(
-      { data: [row("Austen")] },
-      { error: { code: "42501" } },
-    );
-    expect(
-      await findReferences(client, TICKET, ENGLISH, "en", () => embedder),
-    ).toEqual([]);
-    expect(rpc).toHaveBeenCalledTimes(1);
-  });
-
-  it.each(["search_style_passages", "read_style_passages"])(
-    "gives up when %s stalls, so the model keeps its time",
-    async (name) => {
-      const stop = new AbortController();
-      const timeout = vi
-        .spyOn(AbortSignal, "timeout")
-        .mockReturnValue(stop.signal);
-      // What the real client does with the signal: the call ends with an error
-      const stalled = (signal: AbortSignal) =>
-        new Promise((resolve) =>
-          signal.addEventListener("abort", () =>
-            resolve({ data: null, error: { code: "" } }),
-          ),
-        );
-      const answered = () =>
-        Promise.resolve({ data: [row("Austen")], error: null });
-      const client = {
-        rpc: vi.fn((called: string) => ({
-          abortSignal: called === name ? stalled : answered,
-        })),
-      } as never;
-      const found = findReferences(
-        client,
-        TICKET,
-        ENGLISH,
-        "en",
-        () => embedder,
+  it("gives up when the search stalls, so the model keeps its time", async () => {
+    const stop = new AbortController();
+    const timeout = vi
+      .spyOn(AbortSignal, "timeout")
+      .mockReturnValue(stop.signal);
+    // What the real client does with the signal: the call ends with an error
+    const stalled = (signal: AbortSignal) =>
+      new Promise((resolve) =>
+        signal.addEventListener("abort", () =>
+          resolve({ data: null, error: { code: "" } }),
+        ),
       );
-      await new Promise((resolve) => setTimeout(resolve));
-      stop.abort();
-      expect(await found).toEqual([]);
-      expect(timeout).toHaveBeenCalledExactlyOnceWith(5_000);
-    },
-  );
+    const client = { rpc: vi.fn(() => ({ abortSignal: stalled })) } as never;
+    const found = findReferences(
+      client,
+      ACCOUNT,
+      TICKET,
+      ENGLISH,
+      "en",
+      () => embedder,
+    );
+    await new Promise((resolve) => setTimeout(resolve));
+    stop.abort();
+    expect(await found).toEqual([]);
+    expect(timeout).toHaveBeenCalledExactlyOnceWith(5_000);
+  });
 
   it("keeps at most one excerpt per author and three in total", async () => {
     const rows = [
@@ -175,6 +174,7 @@ describe("findReferences", () => {
     const { client } = fakeSupabase({ data: rows });
     const refs = await findReferences(
       client,
+      ACCOUNT,
       TICKET,
       ENGLISH,
       "en",
@@ -187,7 +187,14 @@ describe("findReferences", () => {
     embedder.embed.mockReturnValue(null as never);
     const { client, rpc } = fakeSupabase({ data: [] });
     expect(
-      await findReferences(client, TICKET, ENGLISH, "en", () => embedder),
+      await findReferences(
+        client,
+        ACCOUNT,
+        TICKET,
+        ENGLISH,
+        "en",
+        () => embedder,
+      ),
     ).toEqual([]);
     expect(rpc).not.toHaveBeenCalled();
   });
@@ -195,7 +202,14 @@ describe("findReferences", () => {
   it("never throws: a database error gives no references", async () => {
     const { client } = fakeSupabase({ error: { code: "42501" } });
     expect(
-      await findReferences(client, TICKET, ENGLISH, "en", () => embedder),
+      await findReferences(
+        client,
+        ACCOUNT,
+        TICKET,
+        ENGLISH,
+        "en",
+        () => embedder,
+      ),
     ).toEqual([]);
   });
 
@@ -204,9 +218,9 @@ describe("findReferences", () => {
       throw new Error("missing file");
     };
     const { client } = fakeSupabase({ data: [] });
-    expect(await findReferences(client, TICKET, ENGLISH, "en", broken)).toEqual(
-      [],
-    );
+    expect(
+      await findReferences(client, ACCOUNT, TICKET, ENGLISH, "en", broken),
+    ).toEqual([]);
   });
 
   it("logs what failed, never the text it failed on", async () => {
@@ -218,17 +232,61 @@ describe("findReferences", () => {
       },
     });
     const { client } = fakeSupabase({ data: [] });
-    await findReferences(client, TICKET, ENGLISH, "en", broken);
-    expect(error).toHaveBeenCalled();
-    expect(JSON.stringify(error.mock.calls)).not.toContain("letter");
+    await findReferences(client, ACCOUNT, TICKET, ENGLISH, "en", broken);
+    expect(error).toHaveBeenCalledExactlyOnceWith(
+      "Style references unavailable",
+      "Error",
+    );
+    expect(format(...error.mock.calls.flat())).not.toContain("letter");
+  });
+
+  it("logs a failed search by its code, not by what it says", async () => {
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    const { client } = fakeSupabase({
+      error: { code: "42501", message: `no ticket for ${ENGLISH}` },
+    });
+    await findReferences(
+      client,
+      ACCOUNT,
+      TICKET,
+      ENGLISH,
+      "en",
+      () => embedder,
+    );
+    expect(error).toHaveBeenCalledExactlyOnceWith(
+      "Style search failed",
+      "42501",
+    );
   });
 
   it("can be switched off", async () => {
     vi.stubEnv("STYLE_REFERENCES", "off");
     const { client, rpc } = fakeSupabase({ data: [row("Austen")] });
     expect(
-      await findReferences(client, TICKET, ENGLISH, "en", () => embedder),
+      await findReferences(
+        client,
+        ACCOUNT,
+        TICKET,
+        ENGLISH,
+        "en",
+        () => embedder,
+      ),
     ).toEqual([]);
     expect(rpc).not.toHaveBeenCalled();
+  });
+});
+
+describe("the switch for the excerpts", () => {
+  it.each(["off", "OFF", " Off ", "false", "0", "no"])(
+    "turns them off with %j",
+    (value) => {
+      vi.stubEnv("STYLE_REFERENCES", value);
+      expect(referencesEnabled()).toBe(false);
+    },
+  );
+
+  it.each(["", "on", "true"])("leaves them on with %j", (value) => {
+    vi.stubEnv("STYLE_REFERENCES", value);
+    expect(referencesEnabled()).toBe(true);
   });
 });

@@ -1,3 +1,4 @@
+import { format } from "node:util";
 import { AuthApiError, AuthRetryableFetchError } from "@supabase/supabase-js";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { RewriteError } from "@/lib/rewrite/claude";
@@ -14,6 +15,7 @@ vi.mock("next/server", async (importOriginal) => ({
   },
 }));
 const createClient = vi.fn();
+const createServiceClient = vi.fn();
 
 vi.mock("@/lib/rewrite/claude", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/rewrite/claude")>()),
@@ -26,6 +28,9 @@ vi.mock("@/lib/style/retrieve", () => ({
 }));
 vi.mock("@/lib/supabase/server", () => ({
   createClient: () => createClient(),
+}));
+vi.mock("@/lib/supabase/service", () => ({
+  createServiceClient: () => createServiceClient(),
 }));
 
 const { POST } = await import("@/app/api/rewrite/route");
@@ -53,12 +58,17 @@ const lines = async (response: Response) =>
 
 type RpcResult = { data: unknown; error: { code: string } | null };
 
-// Fake Supabase client: a signed-in user, and the answers of the quota functions
+// The two fake clients: the session only says who is asking and holds no rpc and no table, so a
+// quota call or a history write through it fails the test. The server's answers the quota functions.
 function fakeSupabase({
   userId = "user-1" as string | null,
   reserve = { data: "res-1", error: null } as RpcResult,
   start = { data: true, error: null } as RpcResult,
-  insertError = null as { code: string } | null,
+  insertError = null as {
+    code: string;
+    message?: string;
+    details?: string;
+  } | null,
   authError = null as Error | null,
 } = {}) {
   const insert = vi.fn().mockResolvedValue({ error: insertError });
@@ -67,6 +77,7 @@ function fakeSupabase({
     if (name === "start_rewrite") return start;
     return { data: true, error: null };
   });
+  const server = { rpc, from: vi.fn(() => ({ insert })) };
   const client = {
     auth: {
       getClaims: async () => ({
@@ -74,11 +85,15 @@ function fakeSupabase({
         error: authError,
       }),
     },
-    rpc,
-    from: vi.fn(() => ({ insert })),
+    server,
   };
-  return { client, insert, rpc };
+  return { client, server, insert, rpc };
 }
+
+const connect = (client: ReturnType<typeof fakeSupabase>["client"]) => {
+  createClient.mockResolvedValue(client);
+  createServiceClient.mockReturnValue(client.server);
+};
 
 const names = (rpc: ReturnType<typeof fakeSupabase>["rpc"]) =>
   rpc.mock.calls.map(([name]) => name);
@@ -90,6 +105,7 @@ beforeEach(() => {
   requestEdits.mockReset();
   streamEdits.mockReset();
   createClient.mockReset();
+  createServiceClient.mockReset();
   findReferences.mockReset().mockResolvedValue([]);
   vi.spyOn(console, "error").mockImplementation(() => {});
   vi.spyOn(console, "info").mockImplementation(() => {});
@@ -120,10 +136,119 @@ describe("POST /api/rewrite: input and access", () => {
     expect(requestEdits).not.toHaveBeenCalled();
   });
 
-  it("rejects an oversized body before parsing it", async () => {
-    const response = await call("x".repeat(41_000));
-    expect(response.status).toBe(413);
-    expect(requestEdits).not.toHaveBeenCalled();
+  describe("the 40 000 byte bound", () => {
+    // Everything after the bound is untouched: the session, the quota and the model
+    const nothingElseRan = () => {
+      expect(createClient).not.toHaveBeenCalled();
+      expect(createServiceClient).not.toHaveBeenCalled();
+      expect(requestEdits).not.toHaveBeenCalled();
+      expect(streamEdits).not.toHaveBeenCalled();
+    };
+
+    it("refuses a body one byte over it", async () => {
+      expect((await call("x".repeat(40_001))).status).toBe(413);
+      nothingElseRan();
+    });
+
+    it("lets a body of exactly that size through to the next check", async () => {
+      expect((await call("x".repeat(40_000))).status).toBe(400);
+      nothingElseRan();
+    });
+
+    it("counts bytes, not characters", async () => {
+      // 20 002 characters, far under the bound as characters, 40 002 bytes
+      expect((await call(`"${"é".repeat(20_000)}"`)).status).toBe(413);
+      expect((await call("€".repeat(13_334))).status).toBe(413);
+      expect((await call("😀".repeat(10_001))).status).toBe(413);
+      nothingElseRan();
+      // The same characters, at the bound itself, reach the JSON check, not the size check
+      expect((await call("é".repeat(20_000))).status).toBe(400);
+      nothingElseRan();
+    });
+
+    // A stream has no Content-Length: only the bytes read can stop it
+    const endless = () => {
+      const seen = { pulled: 0, cancelled: false };
+      const body = new ReadableStream<Uint8Array>({
+        pull(controller) {
+          seen.pulled += 1;
+          controller.enqueue(new Uint8Array(4_096).fill(120));
+        },
+        cancel() {
+          seen.cancelled = true;
+        },
+      });
+      return { body, seen };
+    };
+    const postStream = (body: ReadableStream<Uint8Array>, headers = {}) =>
+      POST(
+        new Request("http://localhost/api/rewrite", {
+          method: "POST",
+          body,
+          headers,
+          duplex: "half",
+        } as RequestInit),
+      );
+
+    it("stops reading a body with no length, and tells the source to stop", async () => {
+      const { body, seen } = endless();
+      const request = postStream(body);
+      expect((await request).status).toBe(413);
+      expect(seen.cancelled).toBe(true);
+      // 40 000 bytes are 10 pieces of 4 096; the stream may read a few ahead, never all of it
+      expect(seen.pulled).toBeLessThan(16);
+      nothingElseRan();
+    });
+
+    it("does not believe a Content-Length that says less than was sent", async () => {
+      const { body, seen } = endless();
+      const response = await postStream(body, { "content-length": "10" });
+      expect(response.status).toBe(413);
+      expect(seen.cancelled).toBe(true);
+      nothingElseRan();
+    });
+
+    it("reassembles a character cut between two pieces", async () => {
+      const whole = new TextEncoder().encode(
+        JSON.stringify({ text: "déjà vu", locale: "fr" }),
+      );
+      const body = new ReadableStream<Uint8Array>({
+        start(controller) {
+          for (const byte of whole) controller.enqueue(new Uint8Array([byte]));
+          controller.close();
+        },
+      });
+      const { client } = fakeSupabase();
+      connect(client);
+      requestEdits.mockResolvedValue([]);
+      const response = await postStream(body);
+      await Promise.all(scheduled.splice(0));
+      expect(response.status).toBe(200);
+      expect(requestEdits.mock.calls[0][0]).toBe("déjà vu");
+    });
+
+    it("answers 400 when the reader leaves mid-body", async () => {
+      const body = new ReadableStream<Uint8Array>({
+        pull(controller) {
+          controller.error(new Error("connection lost"));
+        },
+      });
+      expect((await postStream(body)).status).toBe(400);
+      nothingElseRan();
+    });
+
+    it("still accepts the largest valid request, every character escaped", async () => {
+      const escaped = (count: number) => "\\u20ac".repeat(count);
+      const largest = `{"text":"${escaped(MAX_CHARS)}","voice":"${escaped(1500)}","locale":"en","strength":"standard","stream":false}`;
+      expect(new TextEncoder().encode(largest).length).toBeLessThanOrEqual(
+        40_000,
+      );
+      const { client } = fakeSupabase();
+      connect(client);
+      requestEdits.mockResolvedValue([]);
+      expect((await call(largest)).status).toBe(200);
+      expect(requestEdits).toHaveBeenCalledOnce();
+    });
   });
 
   it("refuses an unknown intensity and an oversized voice", async () => {
@@ -136,22 +261,37 @@ describe("POST /api/rewrite: input and access", () => {
 
   it("fails closed when the API key is missing", async () => {
     vi.stubEnv("ANTHROPIC_API_KEY", "");
-    createClient.mockResolvedValue(fakeSupabase().client);
+    const { client, rpc } = fakeSupabase();
+    connect(client);
     const response = await call({ text: "hello" });
     expect(response.status).toBe(503);
     expect(await response.json()).toEqual({ error: "not_configured" });
+    expect(rpc).not.toHaveBeenCalled();
   });
 
   it("fails closed when Supabase is not configured", async () => {
     createClient.mockResolvedValue(null);
+    createServiceClient.mockReturnValue(fakeSupabase().server);
     const response = await call({ text: "hello" });
     expect(response.status).toBe(503);
     expect(requestEdits).not.toHaveBeenCalled();
   });
 
+  it("fails closed when the server's key is missing, as on a preview", async () => {
+    const { client, rpc } = fakeSupabase();
+    createClient.mockResolvedValue(client);
+    createServiceClient.mockReturnValue(null);
+    const response = await call({ text: "hello" });
+    expect(response.status).toBe(503);
+    expect(await response.json()).toEqual({ error: "not_configured" });
+    expect(rpc).not.toHaveBeenCalled();
+    expect(requestEdits).not.toHaveBeenCalled();
+    expect(streamEdits).not.toHaveBeenCalled();
+  });
+
   it("requires a signed-in user before anything else", async () => {
     const { client, rpc } = fakeSupabase({ userId: null });
-    createClient.mockResolvedValue(client);
+    connect(client);
     const response = await call({ text: "hello" });
     expect(response.status).toBe(401);
     expect(await response.json()).toEqual({ error: "unauthorized" });
@@ -166,7 +306,7 @@ describe("POST /api/rewrite: input and access", () => {
       // Status 0: no answer at all, which only the error's type tells apart
       authError: new AuthRetryableFetchError("fetch failed", 0),
     });
-    createClient.mockResolvedValue(client);
+    connect(client);
     const response = await call({ text: "hello" });
     expect(response.status).toBe(500);
     expect(await response.json()).toEqual({ error: "server_error" });
@@ -181,7 +321,7 @@ describe("POST /api/rewrite: input and access", () => {
         userId: null,
         authError: new AuthApiError("try later", status, undefined),
       });
-      createClient.mockResolvedValue(client);
+      connect(client);
       const response = await call({ text: "hello" });
       expect(response.status).toBe(500);
       expect(rpc).not.toHaveBeenCalled();
@@ -193,20 +333,61 @@ describe("POST /api/rewrite: input and access", () => {
       userId: null,
       authError: new AuthApiError("invalid JWT", 403, "bad_jwt"),
     });
-    createClient.mockResolvedValue(client);
+    connect(client);
     const response = await call({ text: "hello" });
     expect(response.status).toBe(401);
     expect(rpc).not.toHaveBeenCalled();
   });
 });
 
+describe("POST /api/rewrite: the account comes from the verified session", () => {
+  it("ignores an account named in the request", async () => {
+    const { client, rpc, insert } = fakeSupabase({ userId: "user-1" });
+    connect(client);
+    requestEdits.mockResolvedValue([EDIT]);
+    await call({
+      text: "Hello world",
+      account: "someone-else",
+      user_id: "someone-else",
+      reservation: "someone-elses-ticket",
+    });
+    for (const [, args] of rpc.mock.calls as unknown as [string, object][]) {
+      expect(args).toMatchObject({ account: "user-1" });
+    }
+    expect(rpc).toHaveBeenCalledWith(
+      "start_rewrite",
+      expect.objectContaining({ reservation: "res-1" }),
+    );
+    expect(insert).toHaveBeenCalledWith(
+      expect.objectContaining({ user_id: "user-1" }),
+    );
+  });
+
+  it("passes the session's account to every step of a streamed attempt", async () => {
+    const { client, rpc } = fakeSupabase({ userId: "user-7" });
+    connect(client);
+    streamEdits.mockResolvedValue([]);
+    const response = await call({ text: "hello", stream: true });
+    await lines(response);
+    await Promise.all(scheduled.splice(0));
+    expect(names(rpc)).toEqual([
+      "reserve_quota",
+      "start_rewrite",
+      "finish_rewrite",
+    ]);
+    for (const [, args] of rpc.mock.calls as unknown as [string, object][]) {
+      expect(args).toMatchObject({ account: "user-7" });
+    }
+  });
+});
+
 describe("POST /api/rewrite: quota before any cost", () => {
-  it("leaves the limits to the database: reserve_quota takes no argument", async () => {
+  it("leaves the limits to the database: reserve_quota takes the session's account, nothing else", async () => {
     const { client, rpc } = fakeSupabase();
-    createClient.mockResolvedValue(client);
+    connect(client);
     requestEdits.mockResolvedValue([]);
     await call({ text: "hello" });
-    expect(rpc).toHaveBeenCalledWith("reserve_quota");
+    expect(rpc).toHaveBeenCalledWith("reserve_quota", { account: "user-1" });
   });
 
   it.each([
@@ -220,7 +401,7 @@ describe("POST /api/rewrite: quota before any cost", () => {
       const { client, rpc } = fakeSupabase({
         reserve: { data: null, error: { code: sqlState } },
       });
-      createClient.mockResolvedValue(client);
+      connect(client);
       const response = await call({ text: "hello" });
       expect(response.status).toBe(429);
       expect(await response.json()).toEqual({ error: code });
@@ -235,7 +416,7 @@ describe("POST /api/rewrite: quota before any cost", () => {
     const { client } = fakeSupabase({
       reserve: { data: null, error: { code: "53401" } },
     });
-    createClient.mockResolvedValue(client);
+    connect(client);
     const response = await call({ text: "hello", stream: true });
     expect(response.status).toBe(429);
     expect(response.headers.get("content-type")).toContain("json");
@@ -246,7 +427,7 @@ describe("POST /api/rewrite: quota before any cost", () => {
     const { client } = fakeSupabase({
       reserve: { data: null, error: { code: "PGRST000" } },
     });
-    createClient.mockResolvedValue(client);
+    connect(client);
     const response = await call({ text: "hello" });
     expect(response.status).toBe(500);
     expect(await response.json()).toEqual({ error: "server_error" });
@@ -257,7 +438,7 @@ describe("POST /api/rewrite: quota before any cost", () => {
   it("fails closed when the database cannot be reached at all", async () => {
     const { client, rpc } = fakeSupabase();
     rpc.mockRejectedValue(new TypeError("fetch failed"));
-    createClient.mockResolvedValue(client);
+    connect(client);
     const response = await call({ text: "hello", stream: true });
     expect(response.status).toBe(500);
     expect(streamEdits).not.toHaveBeenCalled();
@@ -266,7 +447,7 @@ describe("POST /api/rewrite: quota before any cost", () => {
 
   it("fails closed when the quota check returns no ticket", async () => {
     const { client } = fakeSupabase({ reserve: { data: null, error: null } });
-    createClient.mockResolvedValue(client);
+    connect(client);
     const response = await call({ text: "hello" });
     expect(response.status).toBe(500);
     expect(requestEdits).not.toHaveBeenCalled();
@@ -291,13 +472,14 @@ describe("POST /api/rewrite: quota before any cost", () => {
     "does not search or call the model when start_rewrite %s, and gives the attempt back",
     async (_case, start, status, code) => {
       const { client, rpc } = fakeSupabase({ start: start as RpcResult });
-      createClient.mockResolvedValue(client);
+      connect(client);
       const response = await call({ text: "hello", stream: true });
       expect(response.status).toBe(status);
       expect(await response.json()).toEqual({ error: code });
       expect(findReferences).not.toHaveBeenCalled();
       expect(streamEdits).not.toHaveBeenCalled();
       expect(rpc).toHaveBeenCalledWith("release_quota", {
+        account: "user-1",
         reservation: "res-1",
       });
       expect(rpc).not.toHaveBeenCalledWith("finish_rewrite", expect.anything());
@@ -306,7 +488,7 @@ describe("POST /api/rewrite: quota before any cost", () => {
 
   it("reserves, then starts, then searches: each step waits for the one before", async () => {
     const { client, rpc } = fakeSupabase();
-    createClient.mockResolvedValue(client);
+    connect(client);
     const order: string[] = [];
     const slow = async <T>(name: string, value: T) => {
       order.push(`start:${name}`);
@@ -340,7 +522,7 @@ describe("POST /api/rewrite: quota before any cost", () => {
   // work handed to after(): nothing that closes the ticket may wait until the answer is ready
   it("holds the function open from the moment a ticket exists", async () => {
     const { client, rpc } = fakeSupabase();
-    createClient.mockResolvedValue(client);
+    connect(client);
     streamEdits.mockResolvedValue([]);
     let heldAtStart = 0;
     rpc.mockImplementation(async (name: string) => {
@@ -361,7 +543,7 @@ describe("POST /api/rewrite: quota before any cost", () => {
   describe("what after() is handed stays open until the ticket is closed", () => {
     const pendingFinish = (name: string) => {
       const { client, rpc } = fakeSupabase();
-      createClient.mockResolvedValue(client);
+      connect(client);
       let close = () => {};
       const closed = new Promise<void>((resolve) => {
         close = resolve;
@@ -438,7 +620,7 @@ describe("POST /api/rewrite: quota before any cost", () => {
       fakeSupabase(),
     ];
     for (const { client } of paths) {
-      createClient.mockResolvedValue(client);
+      connect(client);
       requestEdits.mockResolvedValue([]);
       await post({ text: "hello" });
       await expect(
@@ -454,7 +636,7 @@ describe("POST /api/rewrite: quota before any cost", () => {
 
   it("gives the attempt back when the reader left before the start", async () => {
     const { client, rpc } = fakeSupabase();
-    createClient.mockResolvedValue(client);
+    connect(client);
     const controller = new AbortController();
     rpc.mockImplementation(async (name: string) => {
       if (name === "reserve_quota") {
@@ -470,17 +652,22 @@ describe("POST /api/rewrite: quota before any cost", () => {
     await Promise.all(scheduled.splice(0));
     expect(response.status).toBe(499);
     expect(names(rpc)).toEqual(["reserve_quota", "release_quota"]);
+    expect(rpc).toHaveBeenCalledWith("release_quota", {
+      account: "user-1",
+      reservation: "res-1",
+    });
     expect(findReferences).not.toHaveBeenCalled();
     expect(streamEdits).not.toHaveBeenCalled();
   });
 
-  it("hands the ticket to the style search", async () => {
-    const { client } = fakeSupabase();
-    createClient.mockResolvedValue(client);
+  it("hands the account and the ticket to the style search", async () => {
+    const { client, server } = fakeSupabase();
+    connect(client);
     requestEdits.mockResolvedValue([]);
     await call({ text: "Hello world", locale: "fr" });
     expect(findReferences).toHaveBeenCalledWith(
-      client,
+      server,
+      "user-1",
       "res-1",
       "Hello world",
       "fr",
@@ -491,7 +678,7 @@ describe("POST /api/rewrite: quota before any cost", () => {
 describe("POST /api/rewrite: one answer at a time", () => {
   it("returns located edits and saves them to the history", async () => {
     const { client, insert } = fakeSupabase();
-    createClient.mockResolvedValue(client);
+    connect(client);
     requestEdits.mockResolvedValue([
       EDIT,
       { original: "missing", replacement: "x", reason: "not in text" },
@@ -524,7 +711,7 @@ describe("POST /api/rewrite: one answer at a time", () => {
 
   it("does not call an answer whose every edit failed a check 'nothing to change'", async () => {
     const { client, rpc, insert } = fakeSupabase();
-    createClient.mockResolvedValue(client);
+    connect(client);
     requestEdits.mockResolvedValue([
       { original: "missing", replacement: "x", reason: "not in text" },
       { original: "world 12", replacement: "world 13", reason: "changed" },
@@ -533,6 +720,7 @@ describe("POST /api/rewrite: one answer at a time", () => {
     expect(response.status).toBe(502);
     expect(await response.json()).toEqual({ error: "upstream_error" });
     expect(rpc).toHaveBeenCalledWith("finish_rewrite", {
+      account: "user-1",
       reservation: "res-1",
       outcome: "failed",
     });
@@ -541,7 +729,7 @@ describe("POST /api/rewrite: one answer at a time", () => {
 
   it("does call it 'nothing to change' when every edit changed nothing anyway", async () => {
     const { client, rpc, insert } = fakeSupabase();
-    createClient.mockResolvedValue(client);
+    connect(client);
     requestEdits.mockResolvedValue([
       { original: "world", replacement: "world", reason: "fine" },
     ]);
@@ -549,6 +737,7 @@ describe("POST /api/rewrite: one answer at a time", () => {
     expect(response.status).toBe(200);
     expect((await response.json()).edits).toEqual([]);
     expect(rpc).toHaveBeenCalledWith("finish_rewrite", {
+      account: "user-1",
       reservation: "res-1",
       outcome: "succeeded",
     });
@@ -559,10 +748,11 @@ describe("POST /api/rewrite: one answer at a time", () => {
 
   it("closes the ticket as a success, without giving the attempt back", async () => {
     const { client, rpc } = fakeSupabase();
-    createClient.mockResolvedValue(client);
+    connect(client);
     requestEdits.mockResolvedValue([EDIT]);
     await call({ text: "Hello world" });
     expect(rpc).toHaveBeenCalledWith("finish_rewrite", {
+      account: "user-1",
       reservation: "res-1",
       outcome: "succeeded",
     });
@@ -571,7 +761,7 @@ describe("POST /api/rewrite: one answer at a time", () => {
 
   it("passes the style references to Claude and credits them in the response", async () => {
     const { client } = fakeSupabase();
-    createClient.mockResolvedValue(client);
+    connect(client);
     const refs = [
       {
         id: "1",
@@ -592,6 +782,7 @@ describe("POST /api/rewrite: one answer at a time", () => {
       undefined,
       { strength: "standard", voice: undefined },
       expect.any(Number),
+      expect.any(Object),
     );
     const body = await response.json();
     expect(body.references).toEqual([{ author: "Jane Austen", title: "Emma" }]);
@@ -608,27 +799,27 @@ describe("POST /api/rewrite: one answer at a time", () => {
 
     it("reaches the model call of a whole answer", async () => {
       const { client } = fakeSupabase();
-      createClient.mockResolvedValue(client);
+      connect(client);
       slowSearch();
       requestEdits.mockResolvedValue([EDIT]);
       await call({ text: "Hello world" });
-      expect(requestEdits.mock.calls[0].at(-1)).toBeGreaterThanOrEqual(30);
+      expect(requestEdits.mock.calls[0][4]).toBeGreaterThanOrEqual(30);
     });
 
     it("reaches the model call of a stream", async () => {
       const { client } = fakeSupabase();
-      createClient.mockResolvedValue(client);
+      connect(client);
       slowSearch();
       streamEdits.mockResolvedValue([]);
       const response = await call({ text: "Hello world", stream: true });
       await response.text();
-      expect(streamEdits.mock.calls[0].at(-1)).toBeGreaterThanOrEqual(30);
+      expect(streamEdits.mock.calls[0][6]).toBeGreaterThanOrEqual(30);
     });
   });
 
   it("rewrites without references when none are found", async () => {
     const { client } = fakeSupabase();
-    createClient.mockResolvedValue(client);
+    connect(client);
     requestEdits.mockResolvedValue([EDIT]);
     const response = await call({ text: "Hello world" });
     expect((await response.json()).references).toEqual([]);
@@ -636,7 +827,7 @@ describe("POST /api/rewrite: one answer at a time", () => {
 
   it("passes the intensity and the voice to the model", async () => {
     const { client } = fakeSupabase();
-    createClient.mockResolvedValue(client);
+    connect(client);
     requestEdits.mockResolvedValue([]);
     await call({ text: "hello", strength: "light", voice: "Short lines." });
     expect(requestEdits).toHaveBeenCalledWith(
@@ -645,12 +836,13 @@ describe("POST /api/rewrite: one answer at a time", () => {
       undefined,
       { strength: "light", voice: "Short lines." },
       expect.any(Number),
+      expect.any(Object),
     );
   });
 
   it("never stores the voice sample in the history", async () => {
     const { client, insert } = fakeSupabase();
-    createClient.mockResolvedValue(client);
+    connect(client);
     requestEdits.mockResolvedValue([EDIT]);
     await call({ text: "Hello world", voice: "My own unmistakable voice." });
     expect(insert).toHaveBeenCalledTimes(1);
@@ -658,8 +850,8 @@ describe("POST /api/rewrite: one answer at a time", () => {
   });
 
   it("does not make the user wait for the history save", async () => {
-    const { client, insert } = fakeSupabase();
-    createClient.mockResolvedValue(client);
+    const { client, insert, rpc } = fakeSupabase();
+    connect(client);
     let release: () => void = () => {};
     insert.mockReturnValue(
       new Promise((resolve) => {
@@ -673,13 +865,42 @@ describe("POST /api/rewrite: one answer at a time", () => {
     ]);
     // The save is still pending, yet the answer is already there
     expect(response).toBeInstanceOf(Response);
+    // And the ticket closes without it: a stalled save must not hold the slot
+    const handed = scheduled.splice(0);
+    await vi.waitFor(() => {
+      expect(insert).toHaveBeenCalledOnce();
+      expect(rpc).toHaveBeenCalledWith("finish_rewrite", {
+        account: "user-1",
+        reservation: "res-1",
+        outcome: "succeeded",
+      });
+    });
     release();
-    await Promise.all(scheduled.splice(0));
+    await Promise.all(handed);
+  });
+
+  it("saves the history without waiting for the ticket to close", async () => {
+    const { client, insert, rpc } = fakeSupabase();
+    connect(client);
+    let release: () => void = () => {};
+    const closing = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    rpc.mockImplementation(async (name: string) => {
+      if (name === "finish_rewrite") await closing;
+      return { data: name === "reserve_quota" ? "res-1" : true, error: null };
+    });
+    requestEdits.mockResolvedValue([EDIT]);
+    expect((await post({ text: "Hello world" })).status).toBe(200);
+    const handed = scheduled.splice(0);
+    await vi.waitFor(() => expect(insert).toHaveBeenCalledOnce());
+    release();
+    await Promise.all(handed);
   });
 
   it("reports where the time went in a Server-Timing header", async () => {
     const { client } = fakeSupabase();
-    createClient.mockResolvedValue(client);
+    connect(client);
     requestEdits.mockResolvedValue([]);
     const response = await call({ text: "hello" });
     expect(response.headers.get("Server-Timing")).toMatch(
@@ -689,13 +910,14 @@ describe("POST /api/rewrite: one answer at a time", () => {
 
   it("keeps a model failure counted: the ticket closes as failed, nothing is given back", async () => {
     const { client, rpc, insert } = fakeSupabase();
-    createClient.mockResolvedValue(client);
+    connect(client);
     requestEdits.mockRejectedValue(new RewriteError("busy", 503));
 
     const response = await call({ text: "hello" });
     expect(response.status).toBe(503);
     expect(await response.json()).toEqual({ error: "busy" });
     expect(rpc).toHaveBeenCalledWith("finish_rewrite", {
+      account: "user-1",
       reservation: "res-1",
       outcome: "failed",
     });
@@ -705,11 +927,12 @@ describe("POST /api/rewrite: one answer at a time", () => {
 
   it("keeps a refusal counted too", async () => {
     const { client, rpc } = fakeSupabase();
-    createClient.mockResolvedValue(client);
+    connect(client);
     requestEdits.mockRejectedValue(new RewriteError("refused", 422));
     const response = await call({ text: "hello" });
     expect(response.status).toBe(422);
     expect(rpc).toHaveBeenCalledWith("finish_rewrite", {
+      account: "user-1",
       reservation: "res-1",
       outcome: "failed",
     });
@@ -725,7 +948,7 @@ describe("POST /api/rewrite: one answer at a time", () => {
           ? { data: null, error: { code: "XX000" } }
           : { data: true, error: null },
     );
-    createClient.mockResolvedValue(client);
+    connect(client);
     requestEdits.mockResolvedValue([EDIT]);
     const response = await call({ text: "Hello world" });
     expect(response.status).toBe(200);
@@ -734,11 +957,12 @@ describe("POST /api/rewrite: one answer at a time", () => {
 
   it("still returns the result, and closes the ticket, when saving the history fails", async () => {
     const { client, rpc } = fakeSupabase({ insertError: { code: "42501" } });
-    createClient.mockResolvedValue(client);
+    connect(client);
     requestEdits.mockResolvedValue([EDIT]);
     const response = await call({ text: "Hello world" });
     expect(response.status).toBe(200);
     expect(rpc).toHaveBeenCalledWith("finish_rewrite", {
+      account: "user-1",
       reservation: "res-1",
       outcome: "succeeded",
     });
@@ -748,29 +972,32 @@ describe("POST /api/rewrite: one answer at a time", () => {
     const logged = vi.spyOn(console, "error").mockImplementation(() => {});
     const { client, rpc, insert } = fakeSupabase();
     insert.mockRejectedValue(new TypeError("fetch failed: my secret text"));
-    createClient.mockResolvedValue(client);
+    connect(client);
     requestEdits.mockResolvedValue([EDIT]);
     const response = await call({ text: "Hello world" });
     expect(response.status).toBe(200);
     expect(rpc).toHaveBeenCalledWith("finish_rewrite", {
+      account: "user-1",
       reservation: "res-1",
       outcome: "succeeded",
     });
     expect(logged).toHaveBeenCalledWith("History save failed", "TypeError");
-    expect(logged.mock.calls.flat().map(String).join(" ")).not.toContain(
-      "secret",
-    );
+    expect(format(...logged.mock.calls.flat())).not.toContain("secret");
   });
 
   it("hides unexpected errors behind a generic code, and keeps them out of the logs", async () => {
     const logged = vi.spyOn(console, "error").mockImplementation(() => {});
     const { client } = fakeSupabase();
-    createClient.mockResolvedValue(client);
+    connect(client);
     requestEdits.mockRejectedValue(new Error("secret details"));
     const response = await call({ text: "hello" });
     expect(response.status).toBe(500);
     expect(await response.json()).toEqual({ error: "server_error" });
-    expect(JSON.stringify(logged.mock.calls)).not.toContain("secret");
+    expect(logged).toHaveBeenCalledExactlyOnceWith(
+      "Unhandled rewrite error",
+      "Error",
+    );
+    expect(format(...logged.mock.calls.flat())).not.toContain("secret");
   });
 });
 
@@ -778,7 +1005,7 @@ describe("POST /api/rewrite: streamed answers", () => {
   // The page always streams, so this is the path that promises the browser no excerpt
   it("sends only the source of each excerpt to the browser", async () => {
     const { client } = fakeSupabase();
-    createClient.mockResolvedValue(client);
+    connect(client);
     findReferences.mockResolvedValue([
       {
         id: "p1",
@@ -802,7 +1029,7 @@ describe("POST /api/rewrite: streamed answers", () => {
 
   it("streams when asked: events, then the history and a closed ticket", async () => {
     const { client, insert, rpc } = fakeSupabase();
-    createClient.mockResolvedValue(client);
+    connect(client);
     streamEdits.mockImplementation(async (_t, _r, onEdit) => {
       onEdit({ original: "world", replacement: "there", reason: "warmer" });
     });
@@ -815,6 +1042,7 @@ describe("POST /api/rewrite: streamed answers", () => {
       expect.objectContaining({ edit_count: 1 }),
     );
     expect(rpc).toHaveBeenCalledWith("finish_rewrite", {
+      account: "user-1",
       reservation: "res-1",
       outcome: "succeeded",
     });
@@ -822,13 +1050,14 @@ describe("POST /api/rewrite: streamed answers", () => {
 
   it("streams a failure as an event, and the attempt stays counted", async () => {
     const { client, rpc, insert } = fakeSupabase();
-    createClient.mockResolvedValue(client);
+    connect(client);
     streamEdits.mockRejectedValue(new RewriteError("busy", 503));
     const response = await call({ text: "hello", stream: true });
     const sent = await lines(response);
     await Promise.all(scheduled.splice(0));
     expect(sent.at(-1)).toEqual({ type: "error", error: "busy" });
     expect(rpc).toHaveBeenCalledWith("finish_rewrite", {
+      account: "user-1",
       reservation: "res-1",
       outcome: "failed",
     });
@@ -838,7 +1067,7 @@ describe("POST /api/rewrite: streamed answers", () => {
 
   it("counts the attempt when the reader leaves while the model writes", async () => {
     const { client, rpc, insert } = fakeSupabase();
-    createClient.mockResolvedValue(client);
+    connect(client);
     const controller = new AbortController();
     streamEdits.mockImplementation(
       async (_t, _r, _e, _o, _c, signal: AbortSignal) => {
@@ -855,6 +1084,7 @@ describe("POST /api/rewrite: streamed answers", () => {
     controller.abort();
     await Promise.all(scheduled.splice(0));
     expect(rpc).toHaveBeenCalledWith("finish_rewrite", {
+      account: "user-1",
       reservation: "res-1",
       outcome: "cancelled",
     });
@@ -866,7 +1096,7 @@ describe("POST /api/rewrite: streamed answers", () => {
   // spent. The attempt counts, and the abort stops the call before it reaches the service.
   it("counts the attempt when the reader leaves before the model is called", async () => {
     const { client, rpc, insert } = fakeSupabase();
-    createClient.mockResolvedValue(client);
+    connect(client);
     const controller = new AbortController();
     findReferences.mockImplementation(async () => {
       controller.abort();
@@ -887,6 +1117,7 @@ describe("POST /api/rewrite: streamed answers", () => {
     await Promise.all(scheduled.splice(0));
     expect(sawAbort).toBe(true);
     expect(rpc).toHaveBeenCalledWith("finish_rewrite", {
+      account: "user-1",
       reservation: "res-1",
       outcome: "cancelled",
     });
@@ -896,7 +1127,7 @@ describe("POST /api/rewrite: streamed answers", () => {
 
   it("closes the ticket even when the history cannot be saved", async () => {
     const { client, rpc } = fakeSupabase({ insertError: { code: "42501" } });
-    createClient.mockResolvedValue(client);
+    connect(client);
     streamEdits.mockImplementation(async (_t, _r, onEdit) => {
       onEdit(EDIT);
     });
@@ -904,8 +1135,207 @@ describe("POST /api/rewrite: streamed answers", () => {
     await lines(response);
     await Promise.all(scheduled.splice(0));
     expect(rpc).toHaveBeenCalledWith("finish_rewrite", {
+      account: "user-1",
       reservation: "res-1",
       outcome: "succeeded",
     });
+  });
+});
+
+describe("POST /api/rewrite: what an attempt leaves in the logs", () => {
+  const CANARY = "CANARY-do-not-log";
+  let logged: string[];
+
+  beforeEach(() => {
+    logged = [];
+    for (const level of ["log", "info", "warn", "error", "debug"] as const) {
+      vi.spyOn(console, level).mockImplementation((...args: unknown[]) => {
+        logged.push(format(...args));
+      });
+    }
+  });
+
+  const attempts = () =>
+    logged
+      .filter((line) => line.startsWith("Rewrite attempt "))
+      .map((line) => JSON.parse(line.slice("Rewrite attempt ".length)));
+
+  const fills = (report: object) =>
+    Object.assign(report, {
+      model: "claude-test",
+      stopReason: "end_turn",
+      inputTokens: 1200,
+      outputTokens: 340,
+      cacheReadTokens: 0,
+      cacheWriteTokens: 0,
+      modelMs: 987.6,
+      firstEditMs: 123.4,
+    });
+
+  it("says how a whole answer went, in numbers", async () => {
+    const { client } = fakeSupabase();
+    connect(client);
+    findReferences.mockResolvedValue([
+      {
+        id: "p",
+        author: "A",
+        title: "T",
+        kind: "essay",
+        year: null,
+        body: "b",
+        similarity: 0.5,
+      },
+    ]);
+    requestEdits.mockImplementation(
+      async (_t, _r, _c, _o, _e, report: object) => {
+        fills(report);
+        return [EDIT, { original: "gone", replacement: "x", reason: "r" }];
+      },
+    );
+    await call({ text: "Hello world" });
+    expect(attempts()).toEqual([
+      {
+        state: "succeeded",
+        model: "claude-test",
+        stop_reason: "end_turn",
+        input_tokens: 1200,
+        output_tokens: 340,
+        cache_read_tokens: 0,
+        cache_write_tokens: 0,
+        prep_ms: expect.any(Number),
+        model_ms: 988,
+        first_edit_ms: 123,
+        references: 1,
+        edits: 1,
+        dropped: 1,
+      },
+    ]);
+  });
+
+  it("says how a streamed answer went", async () => {
+    const { client } = fakeSupabase();
+    connect(client);
+    streamEdits.mockImplementation(
+      async (_t, _r, onEdit, _o, _c, _s, _e, report: object) => {
+        fills(report);
+        onEdit(EDIT);
+      },
+    );
+    const response = await call({ text: "Hello world", stream: true });
+    await lines(response);
+    await Promise.all(scheduled.splice(0));
+    expect(attempts()).toEqual([
+      expect.objectContaining({
+        state: "succeeded",
+        input_tokens: 1200,
+        output_tokens: 340,
+        edits: 1,
+        dropped: 0,
+      }),
+    ]);
+  });
+
+  it.each([
+    ["a failure", new RewriteError("busy", 503), "failed"],
+    ["a refusal", new RewriteError("refused", 422), "failed"],
+  ])("reports %s as %s", async (_case, error, state) => {
+    const { client } = fakeSupabase();
+    connect(client);
+    requestEdits.mockRejectedValue(error);
+    await call({ text: "hello" });
+    expect(attempts()).toEqual([expect.objectContaining({ state, edits: 0 })]);
+  });
+
+  it("reports a refused reservation and a refused start by their code, with no model", async () => {
+    const refused = fakeSupabase({
+      reserve: { data: null, error: { code: "53401" } },
+    });
+    connect(refused.client);
+    await call({ text: "hello" });
+    expect(attempts().at(-1)).toEqual({ state: "quota_exceeded" });
+
+    const full = fakeSupabase({
+      start: { data: null, error: { code: "53402" } },
+    });
+    connect(full.client);
+    await call({ text: "hello" });
+    expect(attempts().at(-1)).toEqual({ state: "global_quota_exceeded" });
+  });
+
+  it("reports an attempt given back", async () => {
+    const { client, rpc } = fakeSupabase();
+    connect(client);
+    const controller = new AbortController();
+    rpc.mockImplementation(async (name: string) => {
+      if (name === "reserve_quota") controller.abort();
+      return { data: name === "reserve_quota" ? "res-1" : true, error: null };
+    });
+    await post({ text: "hello", stream: true }, controller.signal);
+    await Promise.all(scheduled.splice(0));
+    expect(attempts()).toEqual([{ state: "released" }]);
+  });
+
+  it("does not copy a stop reason it does not know", async () => {
+    const { client } = fakeSupabase();
+    connect(client);
+    requestEdits.mockImplementation(
+      async (_t, _r, _c, _o, _e, report: { stopReason?: string }) => {
+        report.stopReason = `${CANARY} a free text`;
+        return [];
+      },
+    );
+    await call({ text: "hello" });
+    expect(attempts()[0].stop_reason).toBe("other");
+    expect(logged.join("\n")).not.toContain(CANARY);
+  });
+
+  it("keeps the text, the voice, the excerpts and the answer out of every log line", async () => {
+    for (const stream of [false, true]) {
+      // The database quotes the row it refused
+      const { client } = fakeSupabase({
+        insertError: {
+          code: "42501",
+          message: `new row refused: ${CANARY} text and more`,
+          details: `Failing row contains (${CANARY} text and more).`,
+        },
+      });
+      connect(client);
+      findReferences.mockResolvedValue([
+        {
+          id: `${CANARY}-id`,
+          author: `${CANARY}-author`,
+          title: `${CANARY}-title`,
+          kind: "essay",
+          year: null,
+          body: `${CANARY}-excerpt`,
+          similarity: 0.5,
+        },
+      ]);
+      const edit = {
+        original: `${CANARY} text`,
+        replacement: `${CANARY} replaced`,
+        reason: `${CANARY} reason`,
+      };
+      const answer = async (...args: unknown[]) => {
+        fills(args.at(-1) as object);
+        if (stream) (args[2] as (e: typeof edit) => void)(edit);
+        return [edit];
+      };
+      requestEdits.mockImplementation(answer);
+      streamEdits.mockImplementation(answer);
+      const response = await call({
+        text: `${CANARY} text and more`,
+        voice: `${CANARY} voice`,
+        stream,
+      });
+      await response.text();
+      await Promise.all(scheduled.splice(0));
+    }
+    expect(attempts()).toHaveLength(2);
+    expect(logged.join("\n")).not.toContain(CANARY);
+    expect(vi.mocked(console.error).mock.calls).toEqual([
+      ["History save failed", "42501"],
+      ["History save failed", "42501"],
+    ]);
   });
 });

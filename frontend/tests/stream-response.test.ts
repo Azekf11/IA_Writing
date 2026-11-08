@@ -1,3 +1,4 @@
+import { format } from "node:util";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { RewriteError } from "@/lib/rewrite/claude";
 import { EventReader, type StreamEvent } from "@/lib/rewrite/protocol";
@@ -156,9 +157,7 @@ describe("streamResponse", () => {
     expect(JSON.stringify(sent)).not.toContain("secret");
     expect(sent.at(-1)).toEqual({ type: "error", error: "server_error" });
     expect(logged).toHaveBeenCalledWith("Unhandled rewrite error", "Error");
-    expect(logged.mock.calls.flat().map(String).join(" ")).not.toContain(
-      "secret",
-    );
+    expect(format(...logged.mock.calls.flat())).not.toContain("secret");
   });
 
   it("keeps what was delivered when the model fails halfway, as a failed attempt", async () => {

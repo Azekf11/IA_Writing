@@ -1,0 +1,32 @@
+Embedding model
+
+weights.i8, scales.f32 and tokenizer.json in this folder come from the model
+sentence-transformers/static-similarity-mrl-multilingual-v1
+https://huggingface.co/sentence-transformers/static-similarity-mrl-multilingual-v1
+licensed under the Apache License, Version 2.0: see LICENSE in this folder.
+
+The upstream repository declares that licence in its model card. At the revision below it holds no
+LICENSE and no NOTICE file, so there is no upstream notice to carry over. LICENSE here is the text
+published by the Apache Software Foundation, unchanged.
+
+Changes made to the model
+- Reduced from 1,024 to 256 dimensions: only the first 256 columns of each row are kept.
+- Quantised: each row is stored as int8 in weights.i8, with one float32 scale per row in scales.f32.
+  The scale is the row's largest absolute value divided by 127, or 1 for a row of zeros, and each
+  stored value is the original divided by the scale, rounded to the nearest integer (halves to even)
+  and kept within -127 to 127.
+- tokenizer.json is the upstream file, unchanged.
+
+The conversion is corpus-pipeline/scripts/export_embedder.py and
+corpus-pipeline/src/aiwd/style/embed.py.
+
+Revision
+The export that produced these files did not record its revision. It is now pinned to
+b68f4122911bcffcd6e1f695f2d99cd6788972d8, the head of the upstream repository on 4 November 2026.
+Checks made that day against that revision:
+- tokenizer.json has the same Git blob id as upstream, 24ce57bee78a391706c443e2417f3339a842438f.
+- 0_StaticEmbedding/model.safetensors has the LFS id
+  8245ab78ee71dded845a82d2270fcb9e785b29dad0e1619f69d5390c47d9ba00, the same as at the first upload
+  (bae9c8b1d48e), and so has the tokenizer.
+- Seven rows of the upstream weights, read over HTTP, give exactly the int8 values and the scales
+  stored here under the formula above. The whole table was not recomputed.

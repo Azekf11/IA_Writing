@@ -1,7 +1,9 @@
 // @vitest-environment node
+import { format } from "node:util";
 import Anthropic from "@anthropic-ai/sdk";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { requestEdits, RewriteError, streamEdits } from "@/lib/rewrite/claude";
+import type { AttemptReport } from "@/lib/rewrite/diagnostics";
 import { sse } from "./anthropic-sse";
 
 // Minimal stand-in for the SDK client
@@ -122,9 +124,7 @@ describe("requestEdits", () => {
       );
     }
     // The class is logged, not the message
-    expect(logged.mock.calls.flat().map(String).join(" ")).not.toContain(
-      "socket hang up",
-    );
+    expect(format(...logged.mock.calls.flat())).not.toContain("socket hang up");
   });
 
   it("stays quiet when the reader cancelled the call", async () => {
@@ -150,9 +150,7 @@ describe("requestEdits", () => {
       "Unexpected rewrite failure",
       "SyntaxError",
     );
-    expect(logged.mock.calls.flat().map(String).join(" ")).not.toContain(
-      "secret",
-    );
+    expect(format(...logged.mock.calls.flat())).not.toContain("secret");
   });
 
   it("gives the call a deadline and no retries", async () => {
@@ -421,9 +419,7 @@ describe("streamEdits, through the real SDK", () => {
       ).toBe("upstream_error");
       expect(seen).toHaveLength(edits);
     }
-    expect(logged.mock.calls.flat().map(String).join(" ")).not.toContain(
-      "secret",
-    );
+    expect(format(...logged.mock.calls.flat())).not.toContain("secret");
   });
 
   it.each(["overloaded_error", "rate_limit_error"])(
@@ -462,7 +458,11 @@ describe("streamEdits, through the real SDK", () => {
 });
 
 describe("requestEdits, through the real SDK", () => {
-  const message = (text: string | null, stopReason: string) =>
+  const message = (
+    text: string | null,
+    stopReason: string,
+    usage = { input_tokens: 1, output_tokens: 1 },
+  ) =>
     JSON.stringify({
       id: "m",
       type: "message",
@@ -471,10 +471,15 @@ describe("requestEdits, through the real SDK", () => {
       content: text === null ? [] : [{ type: "text", text }],
       stop_reason: stopReason,
       stop_sequence: null,
-      usage: { input_tokens: 1, output_tokens: 1 },
+      usage,
     });
   const run = (body: string) =>
     requestEdits("a d", [], realClient(body, "application/json").client);
+
+  // The tests that read the model's name stub ANTHROPIC_MODEL, so the shell cannot change it
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
 
   it("returns the edits of a complete answer", async () => {
     expect(await run(message(answer, "end_turn"))).toHaveLength(2);
@@ -489,5 +494,48 @@ describe("requestEdits, through the real SDK", () => {
     expect(await codeOf(run(message(firstEdit, "max_tokens")))).toBe(
       "upstream_error",
     );
+  });
+
+  it("fills in the model, the tokens, the ending and the time of a whole answer", async () => {
+    vi.stubEnv("ANTHROPIC_MODEL", "");
+    const report: AttemptReport = {};
+    const body = message(answer, "end_turn", {
+      input_tokens: 1_200,
+      output_tokens: 340,
+    });
+    await requestEdits(
+      "a d",
+      [],
+      realClient(body, "application/json").client,
+      {},
+      0,
+      report,
+    );
+    expect(report).toMatchObject({
+      model: "claude-sonnet-5-5",
+      stopReason: "end_turn",
+      inputTokens: 1_200,
+      outputTokens: 340,
+    });
+    expect(report.modelMs).toBeGreaterThanOrEqual(0);
+  });
+
+  it("keeps what an answer it refuses said about itself", async () => {
+    vi.stubEnv("ANTHROPIC_MODEL", "");
+    const report: AttemptReport = {};
+    const client = realClient(
+      message(null, "refusal"),
+      "application/json",
+    ).client;
+    expect(await codeOf(requestEdits("a d", [], client, {}, 0, report))).toBe(
+      "refused",
+    );
+    expect(report).toMatchObject({
+      model: "claude-sonnet-5-5",
+      stopReason: "refusal",
+      inputTokens: 1,
+      outputTokens: 1,
+    });
+    expect(report.modelMs).toBeGreaterThanOrEqual(0);
   });
 });

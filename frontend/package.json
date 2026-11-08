@@ -12,6 +12,8 @@
     "test": "vitest run",
     "e2e": "playwright test",
     "audit": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON audit/run.mjs",
+    "compare": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON audit/compare.mjs",
+    "stand-in": "node audit/mock-anthropic.mjs",
     "test:db": "node --test --test-concurrency=1 '../supabase/tests/*.test.mjs'"
   },
   "dependencies": {

@@ -1,6 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import type { Reference } from "@/lib/style/retrieve";
+import { noteAnswer, type AttemptReport } from "./diagnostics";
 import { EditStreamParser } from "./edit-stream";
 import { buildUserMessage, SYSTEM_PROMPT, type MessageOptions } from "./prompt";
 import { ClaudeOutputSchema, type RawEdit } from "./schema";
@@ -137,13 +138,15 @@ export async function requestEdits(
   client: Pick<Anthropic, "messages"> = getClient(),
   options: MessageOptions = {},
   elapsedMs = 0,
+  report: AttemptReport = {},
 ): Promise<RawEdit[]> {
   const deadline = deadlineAfter(elapsedMs);
+  const params = requestParams(text, references, options);
+  const started = performance.now();
+  report.model = params.model;
   try {
-    const message = await client.messages.create(
-      requestParams(text, references, options),
-      callOptions(deadline),
-    );
+    const message = await client.messages.create(params, callOptions(deadline));
+    noteAnswer(report, message);
 
     if (message.stop_reason === "refusal") {
       throw new RewriteError("refused", 422);
@@ -154,6 +157,8 @@ export async function requestEdits(
   } catch (error) {
     if (deadline.aborted) console.error("Model call reached its deadline");
     throw toRewriteError(error);
+  } finally {
+    report.modelMs = performance.now() - started;
   }
 }
 
@@ -168,22 +173,33 @@ export async function streamEdits(
   client: Pick<Anthropic, "messages"> = getClient(),
   signal?: AbortSignal,
   elapsedMs = 0,
+  report: AttemptReport = {},
 ): Promise<RawEdit[]> {
   const parser = new EditStreamParser();
   const all: RawEdit[] = [];
   const deadline = deadlineAfter(elapsedMs);
+  const params = requestParams(text, references, options);
+  const started = performance.now();
+  report.model = params.model;
+  // The answer so far: a stream that ends early leaves the SDK with no message to ask for
+  let soFar: Anthropic.Message | undefined;
   try {
     const stream = client.messages.stream(
-      requestParams(text, references, options),
+      params,
       callOptions(deadline, signal),
     );
-    stream.on("text", (delta) => {
+    stream.on("streamEvent", (_event, snapshot) => {
+      soFar = snapshot;
+    });
+    stream.on("text", (delta: string) => {
       for (const edit of parser.push(delta)) {
+        report.firstEditMs ??= performance.now() - started;
         all.push(edit);
         onEdit(edit);
       }
     });
     const message = await stream.finalMessage();
+    noteAnswer(report, message);
 
     if (message.stop_reason === "refusal") {
       throw new RewriteError("refused", 422);
@@ -195,7 +211,11 @@ export async function streamEdits(
     }
     return all;
   } catch (error) {
+    // The tokens the service had reported when the stream broke or was cancelled
+    noteAnswer(report, soFar);
     if (deadline.aborted) console.error("Model call reached its deadline");
     throw toRewriteError(error);
+  } finally {
+    report.modelMs = performance.now() - started;
   }
 }

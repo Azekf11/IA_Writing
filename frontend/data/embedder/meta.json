@@ -1,5 +1,6 @@
 {
   "model": "sentence-transformers/static-similarity-mrl-multilingual-v1",
+  "revision": "b68f4122911bcffcd6e1f695f2d99cd6788972d8",
   "dim": 256,
   "vocab": 105879,
   "sha256": {

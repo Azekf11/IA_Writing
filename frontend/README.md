@@ -5,18 +5,20 @@ the [root README](../README.md); how it works is in [docs/ARCHITECTURE.md](../do
 
 ## Scripts
 
-| Command             | What it does                                                  |
-| ------------------- | ------------------------------------------------------------- |
-| `npm run dev`       | Dev server                                                    |
-| `npm run build`     | Production build                                              |
-| `npm run start`     | Serves the production build                                   |
-| `npm run lint`      | ESLint                                                        |
-| `npm run typecheck` | TypeScript, no emit                                           |
-| `npm run format`    | Prettier, on all files                                        |
-| `npm test`          | Unit and component tests (Vitest)                             |
-| `npm run e2e`       | Browser tests on the production build, with the API mocked    |
-| `npm run test:db`   | Database policy tests, against a running local Supabase       |
-| `npm run audit`     | The whole site in a browser, against a running local Supabase |
+| Command             | What it does                                                                                     |
+| ------------------- | ------------------------------------------------------------------------------------------------ |
+| `npm run dev`       | Dev server                                                                                       |
+| `npm run build`     | Production build                                                                                 |
+| `npm run start`     | Serves the production build                                                                      |
+| `npm run lint`      | ESLint                                                                                           |
+| `npm run typecheck` | TypeScript, no emit                                                                              |
+| `npm run format`    | Prettier, on all files                                                                           |
+| `npm test`          | Unit and component tests (Vitest)                                                                |
+| `npm run e2e`       | Browser tests on the production build, with the API mocked                                       |
+| `npm run test:db`   | Database policy tests, against a running local Supabase                                          |
+| `npm run audit`     | The whole site in a browser, against a running local Supabase                                    |
+| `npm run stand-in`  | A local stand-in for the model, for a demo without an API key                                    |
+| `npm run compare`   | [The excerpts comparison](../docs/research/style-references-comparison.md), simulated by default |
 
 ## Text and languages
 

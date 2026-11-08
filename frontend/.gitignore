@@ -49,3 +49,4 @@ next-env.d.ts
 /audit/report.md
 /audit/report.json
 /audit/server.log
+/audit/comparison/

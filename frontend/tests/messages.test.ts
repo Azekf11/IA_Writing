@@ -56,4 +56,17 @@ describe("messages", () => {
       /extrait d'\u00e9criture.*extraits du corpus/,
     );
   });
+
+  // What the privacy page says with STYLE_REFERENCES=off
+  it("says nothing of excerpts when they are off, and the rest stays", () => {
+    expect(en.Privacy.aiWithoutExcerpts).not.toMatch(/excerpt/i);
+    expect(fr.Privacy.aiWithoutExcerpts).not.toMatch(/corpus|extraits/i);
+    for (const messages of [en, fr]) {
+      const [opening, ...rest] = messages.Privacy.ai.split(". ");
+      expect(messages.Privacy.aiWithoutExcerpts).toContain(rest.join(". "));
+      expect(
+        opening.startsWith(messages.Privacy.aiWithoutExcerpts.slice(0, 40)),
+      ).toBe(true);
+    }
+  });
 });

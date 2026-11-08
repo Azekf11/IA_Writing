@@ -5,6 +5,7 @@ import pytest
 
 from aiwd.style.embed import (
     META_FILE,
+    MODEL_REVISION,
     WEIGHTS_FILE,
     Embedder,
     normalize,
@@ -98,6 +99,7 @@ def test_manifest_lists_dimensions_and_checksums(embedder):
     _, out, _ = embedder
     meta = json.loads((out / META_FILE).read_text())
     assert meta["dim"] == 8 and meta["vocab"] == 6
+    assert meta["revision"] == MODEL_REVISION
     assert set(meta["sha256"]) == {"weights.i8", "scales.f32", "tokenizer.json"}
 
 

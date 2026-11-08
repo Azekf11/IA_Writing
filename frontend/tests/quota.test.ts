@@ -1,3 +1,4 @@
+import { format } from "node:util";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   finishRewrite,
@@ -18,7 +19,7 @@ const down = () => ({
 let logged: ReturnType<typeof vi.spyOn>;
 
 // Everything printed, as a log would show it: an Error comes out with its message
-const printed = () => logged.mock.calls.flat().map(String).join(" ");
+const printed = () => format(...logged.mock.calls.flat());
 
 beforeEach(() => {
   logged = vi.spyOn(console, "error").mockImplementation(() => {});
@@ -28,11 +29,13 @@ beforeEach(() => {
 describe("reserveQuota", () => {
   it("returns the ticket", async () => {
     const supabase = answering({ data: "ticket-1", error: null });
-    expect(await reserveQuota(supabase)).toEqual({
+    expect(await reserveQuota(supabase, "account-1")).toEqual({
       ok: true,
       ticket: "ticket-1",
     });
-    expect(supabase.rpc).toHaveBeenCalledWith("reserve_quota");
+    expect(supabase.rpc).toHaveBeenCalledWith("reserve_quota", {
+      account: "account-1",
+    });
   });
 
   it.each([
@@ -46,7 +49,11 @@ describe("reserveQuota", () => {
     "turns %s into %s, without logging it as a failure",
     async (sql, code, status) => {
       const supabase = answering({ data: null, error: { code: sql } });
-      expect(await reserveQuota(supabase)).toEqual({ ok: false, code, status });
+      expect(await reserveQuota(supabase, "a")).toEqual({
+        ok: false,
+        code,
+        status,
+      });
       expect(logged).not.toHaveBeenCalled();
     },
   );
@@ -59,7 +66,7 @@ describe("reserveQuota", () => {
       answering({ data: true, error: null }),
       down(),
     ]) {
-      expect(await reserveQuota(supabase)).toEqual({
+      expect(await reserveQuota(supabase, "a")).toEqual({
         ok: false,
         code: "server_error",
         status: 500,
@@ -79,8 +86,11 @@ describe("reserveQuota", () => {
 describe("startRewrite", () => {
   it("says go only when the database says true", async () => {
     const supabase = answering({ data: true, error: null });
-    expect(await startRewrite(supabase, "ticket-1")).toEqual({ ok: true });
+    expect(await startRewrite(supabase, "account-1", "ticket-1")).toEqual({
+      ok: true,
+    });
     expect(supabase.rpc).toHaveBeenCalledWith("start_rewrite", {
+      account: "account-1",
       reservation: "ticket-1",
     });
   });
@@ -90,6 +100,7 @@ describe("startRewrite", () => {
       expect(
         await startRewrite(
           answering({ data: null, error: { code: sql } }),
+          "a",
           "t",
         ),
       ).toEqual({ ok: false, code: "global_quota_exceeded", status: 429 });
@@ -103,7 +114,7 @@ describe("startRewrite", () => {
       answering({ data: null, error: { code: "XX000" } }),
       down(),
     ]) {
-      expect(await startRewrite(supabase, "t")).toEqual({
+      expect(await startRewrite(supabase, "a", "t")).toEqual({
         ok: false,
         code: "server_error",
         status: 500,
@@ -122,10 +133,20 @@ describe("startRewrite", () => {
 describe("closing a ticket", () => {
   it("sends the outcome", async () => {
     const supabase = answering({ data: true, error: null });
-    await finishRewrite(supabase, "t", "cancelled");
+    await finishRewrite(supabase, "a", "t", "cancelled");
     expect(supabase.rpc).toHaveBeenCalledWith("finish_rewrite", {
+      account: "a",
       reservation: "t",
       outcome: "cancelled",
+    });
+  });
+
+  it("gives back for the account it was given", async () => {
+    const supabase = answering({ data: true, error: null });
+    await releaseQuota(supabase, "a", "t");
+    expect(supabase.rpc).toHaveBeenCalledWith("release_quota", {
+      account: "a",
+      reservation: "t",
     });
   });
 
@@ -135,9 +156,9 @@ describe("closing a ticket", () => {
       down(),
     ]) {
       await expect(
-        finishRewrite(supabase, "t", "failed"),
+        finishRewrite(supabase, "a", "t", "failed"),
       ).resolves.toBeUndefined();
-      await expect(releaseQuota(supabase, "t")).resolves.toBeUndefined();
+      await expect(releaseQuota(supabase, "a", "t")).resolves.toBeUndefined();
     }
     expect(logged.mock.calls).toEqual([
       ["finish_rewrite failed", "XX000"],

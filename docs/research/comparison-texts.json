@@ -1,0 +1,142 @@
+{
+  "note": "Written for this comparison. The companies, places, people and figures are invented; a match with a real one is a coincidence. Each text carries the habits the app edits, along with figures, units, attributed numbers and denials that an edit must keep. `facts` is what a rater checks against, see style-references-comparison.md.",
+  "texts": [
+    {
+      "id": "en-port",
+      "locale": "en",
+      "text": "In today's rapidly evolving logistics landscape, Harbourline Freight stands as a testament to the power of careful planning. The company moved 4.2 million tonnes of cargo through the port of Tavermoor in 2025, while its rival Quillbrook Shipping handled 3.1 million tonnes. It is important to note that the new crane did not reduce waiting times during the winter months. Moreover, the project, which cost $48 million, plays a crucial role in the region's broader economic vitality, fostering collaboration between stakeholders and paving the way for a more resilient future.",
+      "facts": [
+        "Harbourline Freight moved 4.2 million tonnes through the port of Tavermoor in 2025",
+        "Quillbrook Shipping handled 3.1 million tonnes",
+        "The new crane did not reduce waiting times during the winter months",
+        "The project cost $48 million"
+      ]
+    },
+    {
+      "id": "en-sleep",
+      "locale": "en",
+      "text": "The Lydgate Institute's groundbreaking study delves into the complex relationship between sleep and memory. Researchers followed 1,240 adults for 18 months and found that those who slept less than 6 hours a night scored 12% lower on recall tests. Dr Mara Ellison, who led the work, said the effect was not seen in participants under 30. This underscores the vital importance of rest, highlighting a transformative shift in how we understand cognitive health. The authors never claim that sleep alone explains the gap. Ultimately, the findings serve as a powerful reminder that our habits shape who we are.",
+      "facts": [
+        "The study followed 1,240 adults for 18 months",
+        "People sleeping less than 6 hours a night scored 12% lower on recall tests",
+        "Dr Mara Ellison said the effect was not seen in participants under 30",
+        "The authors never claim that sleep alone explains the gap"
+      ]
+    },
+    {
+      "id": "en-tram",
+      "locale": "en",
+      "text": "Kestrel Transit's new tram line represents a pivotal moment for the city of Brenmoor. Spanning 14 km and costing €310 million, the line carries 52,000 passengers a day, compared with 38,000 on the buses it replaced. According to the operator, the northern branch will not open before March 2027. Not only does the project reduce congestion, but it also reimagines what urban mobility can be. City officials say journey times fell by 9 minutes on average, and the mayor, Ines Corwin, insists that fares have not risen. In essence, it is a shining example of forward-thinking infrastructure.",
+      "facts": [
+        "The line is 14 km long and cost €310 million",
+        "It carries 52,000 passengers a day, against 38,000 on the buses it replaced",
+        "The operator says the northern branch will not open before March 2027",
+        "City officials say journey times fell by 9 minutes on average",
+        "The mayor, Ines Corwin, insists that fares have not risen"
+      ]
+    },
+    {
+      "id": "en-dairy",
+      "locale": "en",
+      "text": "Nestled in the heart of the Osterfell valley, the Greyford Dairy Cooperative boasts a rich history of sustainable farming. Its 86 member farms produced 31 million litres of milk last year. The average farm received £0.38 per litre, while the neighbouring Ashcombe Creamery paid £0.34. Furthermore, the cooperative has no plans to sell its cheese plant, a decision that speaks volumes about its enduring commitment to the community. It is worth noting that rainfall dropped to 540 mm without any loss of output. From seasoned farmers to young apprentices, everyone plays a part in this vibrant tapestry of rural life.",
+      "facts": [
+        "The 86 member farms produced 31 million litres of milk last year",
+        "Greyford paid an average of £0.38 per litre, Ashcombe Creamery £0.34",
+        "The cooperative has no plans to sell its cheese plant",
+        "Rainfall dropped to 540 mm without any loss of output"
+      ]
+    },
+    {
+      "id": "en-school",
+      "locale": "en",
+      "text": "Education is not just about grades; it is about unlocking potential. In a bold move, the Marlow Heath district gave tablets to 3,600 pupils across 11 schools at a cost of $2.7 million. Attendance rose from 91% to 94% within two terms, yet reading scores did not change. Superintendent Tomas Reyes credits the new timetable, not the tablets, for the rise in attendance. Additionally, teachers received 20 hours of training, ensuring they were equipped to navigate this new digital landscape. As the district looks to the future, one thing is clear: the journey towards educational excellence has only just begun.",
+      "facts": [
+        "The district gave tablets to 3,600 pupils across 11 schools at a cost of $2.7 million",
+        "Attendance rose from 91% to 94% within two terms",
+        "Reading scores did not change",
+        "Superintendent Tomas Reyes credits the new timetable, not the tablets",
+        "Teachers received 20 hours of training"
+      ]
+    },
+    {
+      "id": "en-wind",
+      "locale": "en",
+      "text": "The Corrin Bank wind farm is a game-changer for clean energy in the North Sea. With 62 turbines and a capacity of 480 MW, the site is expected to supply 410,000 homes. Developer Northmere Power put the total investment at £1.1 billion, while the regulator, Ofsel, estimates it at £1.3 billion. It should be noted that no decision has been taken on a second phase. Moreover, the project created 240 permanent jobs, serving as a catalyst for growth and fostering a thriving ecosystem of local suppliers. In conclusion, Corrin Bank highlights the immense potential of renewable energy to transform communities.",
+      "facts": [
+        "The farm has 62 turbines and a capacity of 480 MW",
+        "It is expected to supply 410,000 homes",
+        "Northmere Power puts the investment at £1.1 billion, the regulator Ofsel at £1.3 billion",
+        "No decision has been taken on a second phase",
+        "The project created 240 permanent jobs"
+      ]
+    },
+    {
+      "id": "fr-budget",
+      "locale": "fr",
+      "text": "Dans un monde en constante évolution, la commune de Vallombreuse s'impose comme un véritable modèle de gestion responsable. Son budget atteint 27 millions d'euros en 2025, dont 6,4 millions pour les écoles et 5,1 millions pour la voirie. Il est important de souligner que les impôts locaux n'ont pas augmenté depuis 2021. Par ailleurs, la maire, Odile Ferrant, affirme que la dette ne dépassera pas 9 millions d'euros. Ces choix jouent un rôle crucial dans le dynamisme du territoire et témoignent d'un engagement sans faille en faveur d'un avenir durable pour toutes et tous.",
+      "facts": [
+        "Le budget atteint 27 millions d'euros en 2025",
+        "6,4 millions vont aux écoles et 5,1 millions à la voirie",
+        "Les impôts locaux n'ont pas augmenté depuis 2021",
+        "La maire, Odile Ferrant, affirme que la dette ne dépassera pas 9 millions d'euros"
+      ]
+    },
+    {
+      "id": "fr-train",
+      "locale": "fr",
+      "text": "La réouverture de la ligne entre Marvejac et Saint-Orens marque un tournant décisif pour la mobilité dans la région. Longue de 42 km, elle a coûté 86 millions d'euros et accueille 3 200 voyageurs par jour, contre 1 900 avant les travaux. Selon l'exploitant, le trajet dure désormais 38 minutes. Il convient de noter que les trains de nuit ne reviendront pas avant 2028. Non seulement ce projet désenclave les villages, mais il redéfinit aussi notre rapport au territoire. En somme, cette ligne illustre parfaitement la richesse d'une vision tournée vers l'avenir.",
+      "facts": [
+        "La ligne fait 42 km et a coûté 86 millions d'euros",
+        "Elle accueille 3 200 voyageurs par jour, contre 1 900 avant les travaux",
+        "Selon l'exploitant, le trajet dure 38 minutes",
+        "Les trains de nuit ne reviendront pas avant 2028"
+      ]
+    },
+    {
+      "id": "fr-sante",
+      "locale": "fr",
+      "text": "L'étude menée par l'Institut Belcombe met en lumière les liens complexes entre le bruit et la santé. Les chercheurs ont suivi 2 150 riverains pendant 24 mois et observé 8 % d'insomnies en plus chez ceux qui vivent à moins de 500 m de l'autoroute. La docteure Anne Lescure, qui a dirigé ces travaux, précise que l'effet n'apparaît pas chez les moins de 40 ans. Les auteurs ne concluent jamais à un lien de cause à effet. Force est de constater que ces résultats soulignent l'importance capitale d'une prise de conscience collective, véritable pierre angulaire de la santé de demain.",
+      "facts": [
+        "L'étude a suivi 2 150 riverains pendant 24 mois",
+        "On observe 8 % d'insomnies en plus à moins de 500 m de l'autoroute",
+        "La docteure Anne Lescure précise que l'effet n'apparaît pas chez les moins de 40 ans",
+        "Les auteurs ne concluent jamais à un lien de cause à effet"
+      ]
+    },
+    {
+      "id": "fr-cooperative",
+      "locale": "fr",
+      "text": "Nichée au cœur du massif du Grésivet, la coopérative fromagère d'Ardenac incarne un savoir-faire ancestral. Ses 54 éleveurs ont livré 12 millions de litres de lait l'an dernier, payés 0,46 € le litre, alors que la laiterie voisine de Combrenay en payait 0,41 €. De plus, la coopérative n'a aucune intention de vendre sa cave d'affinage, un choix qui en dit long sur son attachement au terroir. Il est à noter que la production n'a pas baissé malgré une sécheresse de 70 jours. Des jeunes apprentis aux éleveurs chevronnés, chacun contribue à cette riche mosaïque de la vie rurale.",
+      "facts": [
+        "Les 54 éleveurs ont livré 12 millions de litres de lait l'an dernier",
+        "Ardenac paie 0,46 € le litre, la laiterie de Combrenay 0,41 €",
+        "La coopérative n'a aucune intention de vendre sa cave d'affinage",
+        "La production n'a pas baissé malgré une sécheresse de 70 jours"
+      ]
+    },
+    {
+      "id": "fr-lycee",
+      "locale": "fr",
+      "text": "L'éducation ne se résume pas aux notes : elle ouvre le champ des possibles. Dans une démarche audacieuse, le lycée Jean-Morvan a remplacé ses manuels par 1 400 tablettes, pour un coût de 520 000 €. Le taux de réussite au baccalauréat est passé de 83 % à 86 % en deux ans, mais les résultats en français n'ont pas bougé. Le proviseur, Karim Delorme, attribue ce progrès à l'aide aux devoirs, et non aux tablettes. En outre, les enseignants ont suivi 15 heures de formation afin de naviguer dans ce nouveau paysage numérique. Une chose est sûre : l'aventure ne fait que commencer.",
+      "facts": [
+        "Le lycée a remplacé ses manuels par 1 400 tablettes pour 520 000 €",
+        "La réussite au baccalauréat est passée de 83 % à 86 % en deux ans",
+        "Les résultats en français n'ont pas bougé",
+        "Le proviseur, Karim Delorme, attribue le progrès à l'aide aux devoirs, et non aux tablettes",
+        "Les enseignants ont suivi 15 heures de formation"
+      ]
+    },
+    {
+      "id": "fr-solaire",
+      "locale": "fr",
+      "text": "Le parc solaire de Rochebrune s'inscrit pleinement dans une dynamique de transition énergétique. Avec 95 000 panneaux et une puissance de 58 MW, il devrait alimenter 24 000 foyers. L'exploitant, Helvane Énergie, évalue l'investissement à 61 millions d'euros, tandis que la région l'estime à 67 millions d'euros. Il faut souligner qu'aucune décision n'a été prise sur une seconde tranche. Par ailleurs, le chantier a créé 35 emplois permanents, véritable levier de croissance pour le bassin local. En définitive, Rochebrune témoigne du formidable potentiel des énergies renouvelables pour transformer durablement nos territoires.",
+      "facts": [
+        "Le parc compte 95 000 panneaux pour une puissance de 58 MW",
+        "Il devrait alimenter 24 000 foyers",
+        "Helvane Énergie évalue l'investissement à 61 millions d'euros, la région à 67 millions d'euros",
+        "Aucune décision n'a été prise sur une seconde tranche",
+        "Le chantier a créé 35 emplois permanents"
+      ]
+    }
+  ]
+}

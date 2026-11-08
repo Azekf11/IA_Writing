@@ -1,4 +1,6 @@
 // Every public page: it loads, it has the right headers, nothing sensitive leaks.
+import { readdirSync, readFileSync } from "node:fs";
+import { join } from "node:path";
 import { openPage } from "../browser.mjs";
 import { check, expect } from "../lib.mjs";
 
@@ -117,7 +119,7 @@ export async function run(t) {
       );
       const secrets = [
         // A key, not the prefix the Supabase client checks for in its own code
-        /sb_secret_[\w-]{8}|sk-ant-[\w-]{8}|service_role|ANTHROPIC_API_KEY/,
+        /sb_secret_[\w-]{8}|sk-ant-[\w-]{8}|service_role|ANTHROPIC_API_KEY|SUPABASE_SECRET_KEY/,
         // What the server of this run actually holds
         "audit-key-not-real",
         t.env.SECRET_KEY,
@@ -133,6 +135,27 @@ export async function run(t) {
       }
       expect(scripts.length > 0, "no script was read");
       return `${scripts.length} scripts read`;
+    },
+  );
+
+  await check(
+    "security",
+    "the server's key is in no file the site serves publicly",
+    () => {
+      const dir = new URL("../../.next/static/", import.meta.url);
+      const files = readdirSync(dir, { recursive: true, withFileTypes: true })
+        .filter((entry) => entry.isFile())
+        .map((entry) => join(entry.parentPath, entry.name));
+      for (const file of files) {
+        const body = readFileSync(file, "latin1");
+        expect(
+          !body.includes(t.env.SECRET_KEY) &&
+            !body.includes("SUPABASE_SECRET_KEY"),
+          `the key or its name is in ${file}`,
+        );
+      }
+      expect(files.length > 0, "no file was read");
+      return `${files.length} files read`;
     },
   );
 

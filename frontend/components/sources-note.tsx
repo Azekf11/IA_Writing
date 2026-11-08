@@ -1,8 +1,10 @@
 import { useTranslations } from "next-intl";
+import { referencesEnabled } from "@/lib/style/switch";
 
-// Says plainly where the style references come from
+// Says plainly where the style references come from, when there are any
 export function SourcesNote() {
   const t = useTranslations("Home");
+  if (!referencesEnabled()) return null;
 
   return (
     <aside className="border-t border-border pt-6">

@@ -37,9 +37,42 @@ describe("EditCollector", () => {
     expect(collector.dropped).toEqual({ numbers_changed: 1 });
   });
 
+  it("stops reading the text after as many refused edits as it keeps", () => {
+    const collector = new EditCollector("1 \u20ac ".repeat(1250));
+    for (let i = 0; i < MAX_EDITS * 10; i++) {
+      expect(collector.add(raw("\u20ac", "$"))).toBeNull();
+    }
+    expect(collector.dropped).toEqual({
+      not_found: MAX_EDITS,
+      too_many: MAX_EDITS * 9,
+    });
+  });
+
+  it("counts each kind of drop by its own name", () => {
+    const collector = new EditCollector(
+      "A 5 km walk. Apple rose 12% and Google rose 40%. It is safe.",
+    );
+    expect(collector.add(raw("A 5 km walk", "A 5 mile walk"))).toBeNull();
+    expect(
+      collector.add(
+        raw(
+          "Apple rose 12% and Google rose 40%",
+          "Apple rose 40% and Google rose 12%",
+        ),
+      ),
+    ).toBeNull();
+    expect(collector.add(raw("It is safe", "It is not safe"))).toBeNull();
+    expect(collector.dropped).toEqual({
+      units_changed: 1,
+      figures_swapped: 1,
+      negation_changed: 1,
+    });
+    expect(collector.result()).toEqual([]);
+  });
+
   it("drops a quote that is not in the text", () => {
     const collector = new EditCollector(TEXT);
-    expect(collector.add(raw("not there", "x"))).toBeNull();
+    expect(collector.add(raw("absent words", "x"))).toBeNull();
     expect(collector.dropped).toEqual({ not_found: 1 });
   });
 

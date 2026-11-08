@@ -18,6 +18,8 @@ import numpy as np
 from tokenizers import Tokenizer
 
 MODEL_ID = "sentence-transformers/static-similarity-mrl-multilingual-v1"
+# See frontend/data/embedder/NOTICE for how this was checked against the committed files
+MODEL_REVISION = "b68f4122911bcffcd6e1f695f2d99cd6788972d8"
 DIM = 256
 
 WEIGHTS_FILE = "weights.i8"
@@ -57,6 +59,7 @@ def write_artifacts(
     files = (WEIGHTS_FILE, SCALES_FILE, TOKENIZER_FILE)
     meta = {
         "model": MODEL_ID,
+        "revision": MODEL_REVISION,
         "dim": dim,
         "vocab": int(weights.shape[0]),
         "sha256": {name: sha256(out_dir / name) for name in files},

@@ -1,8 +1,10 @@
 import type { Reference } from "@/lib/style/retrieve";
 import type { Strength } from "./schema";
 
-// Patterns and method follow the structure of the open-source "humanizer" skill (blader/humanizer),
-// itself built on Wikipedia's "Signs of AI writing". Kept as a constant so every request uses it.
+// Patterns and method follow the open-source "humanizer" skill (blader/humanizer), itself built on
+// Wikipedia's "Signs of AI writing". Some wording comes from humanizer's SKILL.md (Copyright (c) 2025
+// Siqi Chen, MIT licence, full text in THIRD_PARTY_NOTICES.md), none from the Wikipedia page. Kept as
+// a constant so every request uses it.
 export const SYSTEM_PROMPT = `You are a careful writing editor. The user sends a text between <text> tags. Propose targeted edits so it reads like a person wrote it for one reader, not like a template.
 
 Why generated text sounds the way it does: a model writes whatever fits the widest range of readers, so its choices are even and generic. A person chooses for one reader and one subject, so their choices are uneven and specific. Every pattern below is one form of the generic choice. Word habits change with each model release; the structural habits persist, so they come first.

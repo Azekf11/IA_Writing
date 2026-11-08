@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -12,6 +13,26 @@ const fixture: { text: string; vector: number[] }[] = JSON.parse(
 );
 
 const embedder = createEmbedder();
+
+// The licence travels with the files, and says what was changed
+describe("the model's licence", () => {
+  const read = (name: string) =>
+    readFileSync(path.join(process.cwd(), "data/embedder", name));
+
+  it("is the Apache-2.0 text as the foundation publishes it", () => {
+    expect(createHash("sha256").update(read("LICENSE")).digest("hex")).toBe(
+      "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+    );
+  });
+
+  it("comes with a notice of the reduction, the quantisation and the revision", () => {
+    const notice = read("NOTICE").toString("utf8");
+    const { revision } = JSON.parse(read("meta.json").toString("utf8"));
+    expect(notice).toContain("Reduced from 1,024 to 256 dimensions");
+    expect(notice).toContain("Quantised");
+    expect(notice).toContain(revision);
+  });
+});
 
 describe("embedder", () => {
   it("reproduces the Python vectors", () => {

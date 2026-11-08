@@ -137,6 +137,7 @@
     "access": "Other users cannot read any of this. The site's owner can: your text is stored as written, not encrypted against them. The site runs on Vercel and the data is stored with Supabase, whose sign-in service can also record your IP address and browser.",
     "aiTitle": "AI processing",
     "ai": "Your text is sent to Anthropic (Claude) to produce the suggestions, with your writing sample if you add one and up to three excerpts from the style corpus. Anthropic handles this data under its own terms. Do not submit text you are not allowed to share.",
+    "aiWithoutExcerpts": "Your text is sent to Anthropic (Claude) to produce the suggestions, with your writing sample if you add one. Anthropic handles this data under its own terms. Do not submit text you are not allowed to share.",
     "limitsTitle": "Limits",
     "limits": "Suggestions are style edits. They do not change who wrote a text, and this tool does not detect AI-written text."
   },

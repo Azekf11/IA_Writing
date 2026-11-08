@@ -26,7 +26,7 @@ import {
   setLimits,
   sleep,
 } from "./lib.mjs";
-import { writeReport } from "./report.mjs";
+import { SIMULATED, writeReport } from "./report.mjs";
 
 const PORT = 3300;
 const MOCK_PORT = 4310;
@@ -114,6 +114,8 @@ async function main() {
       ...process.env,
       NEXT_PUBLIC_SUPABASE_URL: env.API_URL,
       NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: env.PUBLISHABLE_KEY,
+      // The local stack's own key, in the build too: the pages suite looks for it in the bundles
+      SUPABASE_SECRET_KEY: env.SECRET_KEY,
       ANTHROPIC_API_KEY: "audit-key-not-real",
       ANTHROPIC_BASE_URL: `http://127.0.0.1:${MOCK_PORT}`,
     };
@@ -170,7 +172,11 @@ async function main() {
 
   writeFileSync(
     new URL("./report.json", import.meta.url),
-    JSON.stringify({ results, issues }, null, 2),
+    JSON.stringify(
+      { simulated: true, note: SIMULATED, results, issues },
+      null,
+      2,
+    ),
   );
   writeFileSync(
     new URL("./report.md", import.meta.url),
@@ -179,7 +185,7 @@ async function main() {
 
   const count = (status) => results.filter((r) => r.status === status).length;
   console.log(
-    `\n${results.length} checks: ${count("pass")} passed, ${count("warn")} warnings, ${count("fail")} failed, ${issues.length} browser issues`,
+    `\n${SIMULATED}\n${results.length} checks: ${count("pass")} passed, ${count("warn")} warnings, ${count("fail")} failed, ${issues.length} browser issues`,
   );
   // A page that logs an error fails the run, even when every check passed. So does a run that
   // checked nothing.
