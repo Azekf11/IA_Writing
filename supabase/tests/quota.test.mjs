@@ -1,5 +1,6 @@
-// The quota policy, tested through the public API with real accounts on a local stack:
-// limits, ceilings shared by every account, concurrency, ticket states and direct calls.
+// The quota policy, tested through the public API with real accounts on a local stack: limits,
+// ceilings shared by every account, concurrency and ticket states, called the way the route does,
+// with the secret key and the account from the session. User tokens only get refusals.
 // Run: npm run test:db   (from frontend/; see README)
 import assert from "node:assert/strict";
 import { after, before, describe, it } from "node:test";
@@ -13,6 +14,7 @@ import {
   globalThisMonth,
   globalToday,
   localStack,
+  psql,
   rpc,
   saveScene,
   setGlobalOn,
@@ -46,19 +48,25 @@ const ROOMY = {
 };
 const limits = (values) => setLimits(api, { ...ROOMY, ...values });
 
-const reserve = (u) => rpc(api, u, "reserve_quota");
-const start = (u, id) => rpc(api, u, "start_rewrite", { reservation: id });
+// What the route calls: the server's key, and the account it read from the session
+const server = (name, args) =>
+  api.service(`/rest/v1/rpc/${name}`, { method: "POST", body: args });
+
+const reserve = (u) => server("reserve_quota", { account: u.id });
+const start = (u, id) =>
+  server("start_rewrite", { account: u.id, reservation: id });
 const finish = (u, id, outcome = "succeeded") =>
-  rpc(api, u, "finish_rewrite", { reservation: id, outcome });
-const release = (u, id) => rpc(api, u, "release_quota", { reservation: id });
+  server("finish_rewrite", { account: u.id, reservation: id, outcome });
+const release = (u, id) =>
+  server("release_quota", { account: u.id, reservation: id });
 const search = (u, id, lang = "en", count = 10) =>
-  rpc(api, u, "search_style_passages", {
+  server("search_style_passages", {
+    account: u.id,
     reservation: id,
     query_embedding: unitVector(0),
     match_lang: lang,
     match_count: count,
   });
-const read = (u, id) => rpc(api, u, "read_style_passages", { reservation: id });
 
 // Reserves and returns the ticket id, failing the test if the reservation is refused
 async function granted(u) {
@@ -160,11 +168,14 @@ describe("the limits belong to the database", () => {
   it("reserve_quota takes no limit from the caller", async () => {
     await limits({});
     const u = await user("args");
-    const forged = await rpc(api, u, "reserve_quota", { daily_limit: 1000000 });
+    const forged = await server("reserve_quota", {
+      account: u.id,
+      daily_limit: 1000000,
+    });
     assert.equal(
       forged.status,
       404,
-      "a reserve_quota with arguments must not exist",
+      "a reserve_quota with a limit must not exist",
     );
     await granted(u);
   });
@@ -340,6 +351,25 @@ describe("no number of parallel requests or accounts gets past a limit", () => {
     });
   }
 
+  // What the deployment guide gives as the way to pause the site
+  it("refuses everything at global_daily = 0, and lets running attempts end", async () => {
+    await limits({});
+    const u = await user("pause");
+    const running = await begun(u);
+    const waiting = await granted(u);
+    const used = await globalToday(api);
+
+    await limits({ global_daily: 0 });
+    assert.equal(sqlState(await reserve(await user("pause-new"))), "53402");
+    assert.equal(sqlState(await start(u, waiting)), "53402");
+    assert.equal(await globalToday(api), used);
+    assert.equal((await finish(u, running)).body, true);
+    assert.equal((await release(u, waiting)).body, true);
+
+    await limits({});
+    assert.equal((await reserve(u)).status, 200);
+  });
+
   it("does not give the global attempts back when accounts are deleted", async () => {
     const before = await globalToday(api);
     await limits({});
@@ -370,7 +400,8 @@ describe("a ticket moves forward once, and only for its owner", () => {
 
   it("never gives back a started ticket, whatever the model did", async () => {
     await limits({});
-    for (const outcome of ["succeeded", "failed", "cancelled"]) {
+    const before = await globalToday(api);
+    for (const [i, outcome] of ["succeeded", "failed", "cancelled"].entries()) {
       const u = await user(`started-${outcome}`);
       const id = await granted(u);
       assert.equal((await start(u, id)).body, true);
@@ -378,6 +409,11 @@ describe("a ticket moves forward once, and only for its owner", () => {
       assert.equal((await finish(u, id, outcome)).body, true);
       assert.equal((await release(u, id)).body, false);
       assert.equal(await userToday(api, u), 1, `${outcome} must stay counted`);
+      assert.equal(
+        await globalToday(api),
+        before + i + 1,
+        `${outcome} must stay counted for the app`,
+      );
       assert.equal((await ticket(api, id)).state, outcome);
     }
   });
@@ -391,11 +427,9 @@ describe("a ticket moves forward once, and only for its owner", () => {
       "42501",
       "a reserved ticket cannot search",
     );
-    assert.deepEqual((await read(u, id)).body, [], "nothing searched yet");
+    assert.equal((await ticket(api, id)).searched_at, null);
     await start(u, id);
-    assert.deepEqual((await read(u, id)).body, [], "nothing searched yet");
-    assert.equal((await search(u, id)).status, 204);
-    const found = await read(u, id);
+    const found = await search(u, id);
     assert.equal(found.status, 200);
     assert.ok(found.body.length > 0 && found.body.length <= 10);
   });
@@ -404,8 +438,7 @@ describe("a ticket moves forward once, and only for its owner", () => {
     await limits({});
     const u = await user("search-cap");
     const fr = await begun(u);
-    assert.equal((await search(u, fr, "fr", 1000)).status, 204);
-    const french = await read(u, fr);
+    const french = await search(u, fr, "fr", 1000);
     assert.equal(french.status, 200);
     assert.deepEqual(
       french.body.map((row) => row.id),
@@ -419,8 +452,7 @@ describe("a ticket moves forward once, and only for its owner", () => {
     assert.equal(french.body[0].body, "Test passage fr-0.");
 
     const en = await begun(u);
-    await search(u, en, "en", 1000);
-    const english = await read(u, en);
+    const english = await search(u, en, "en", 1000);
     assert.ok(english.body.length > 0);
     assert.ok(english.body.every((row) => row.id.startsWith("dbtest-en-")));
   });
@@ -472,21 +504,39 @@ describe("a ticket moves forward once, and only for its owner", () => {
     await limits({});
     const u = await user("search-once");
     const id = await begun(u);
-    assert.equal((await search(u, id)).status, 204);
-    const first = await read(u, id);
+    assert.equal((await search(u, id)).status, 200);
+    assert.equal(sqlState(await search(u, id)), "42501");
     assert.equal(sqlState(await search(u, id, "fr")), "42501");
-    assert.deepEqual(
-      (await read(u, id)).body,
-      first.body,
-      "reading again shows the same passages, not new ones",
+  });
+
+  it("rolls a failed search back, and it can be repeated", async () => {
+    await limits({});
+    const u = await user("search-again");
+    const id = await begun(u);
+    const failed = await api.service(
+      "/rest/v1/rpc/search_style_passages?select=body::int",
+      {
+        method: "POST",
+        body: {
+          account: u.id,
+          reservation: id,
+          query_embedding: unitVector(0),
+          match_lang: "en",
+        },
+      },
     );
+    assert.notEqual(failed.status, 200);
+    assert.equal((await ticket(api, id)).searched_at, null);
+    assert.equal((await search(u, id)).status, 200);
+    assert.notEqual((await ticket(api, id)).searched_at, null);
+    assert.equal(sqlState(await search(u, id)), "42501");
   });
 
   it("refuses a search without a live ticket", async () => {
     await limits({});
     const u = await user("search-none");
     assert.equal(sqlState(await search(u, crypto.randomUUID())), "42501");
-    const old = await rpc(api, u, "match_style_passages", {
+    const old = await server("match_style_passages", {
       query_embedding: unitVector(0),
       match_lang: "en",
     });
@@ -506,17 +556,7 @@ describe("a ticket moves forward once, and only for its owner", () => {
     const u = await user("search-race");
     const id = await begun(u);
     const answers = await Promise.all([search(u, id), search(u, id, "fr")]);
-    assert.deepEqual(answers.map((r) => r.status).sort(), [204, 403]);
-  });
-
-  it("stops reading once the ticket is closed", async () => {
-    await limits({});
-    const u = await user("read-closed");
-    const id = await begun(u);
-    await search(u, id);
-    assert.ok((await read(u, id)).body.length > 0);
-    await finish(u, id);
-    assert.deepEqual((await read(u, id)).body, []);
+    assert.deepEqual(answers.map((r) => r.status).sort(), [200, 403]);
   });
 
   it("finishes a started ticket once, and refuses an unknown outcome", async () => {
@@ -538,9 +578,15 @@ describe("a ticket moves forward once, and only for its owner", () => {
   it("starts a ticket once", async () => {
     await limits({});
     const u = await user("start");
+    const before = await globalToday(api);
     const id = await granted(u);
     assert.equal((await start(u, id)).body, true);
     assert.equal((await start(u, id)).body, false);
+    assert.equal(
+      await globalToday(api),
+      before + 1,
+      "a repeated start must not count again",
+    );
     const other = await granted(u);
     await release(u, other);
     assert.equal(
@@ -548,16 +594,27 @@ describe("a ticket moves forward once, and only for its owner", () => {
       false,
       "a released ticket cannot start",
     );
+    assert.equal(
+      await globalToday(api),
+      before + 1,
+      "a refused start must not count",
+    );
   });
 
   it("does nothing with another account's ticket", async () => {
     await limits({});
     const owner = await user("owner");
     const thief = await user("thief");
+    const before = await globalToday(api);
     const id = await granted(owner);
     assert.equal((await release(thief, id)).body, false);
     assert.equal((await start(thief, id)).body, false);
     assert.equal(sqlState(await search(thief, id)), "42501");
+    assert.equal(
+      await globalToday(api),
+      before,
+      "a refused start must not count",
+    );
     await start(owner, id);
     assert.equal(
       sqlState(await search(thief, id)),
@@ -567,24 +624,24 @@ describe("a ticket moves forward once, and only for its owner", () => {
     assert.equal((await finish(thief, id)).body, false);
     assert.equal((await ticket(api, id)).state, "started");
     assert.equal(await userToday(api, owner), 1);
+    assert.equal(await globalToday(api), before + 1);
     // The owner's one search was not used up
-    assert.equal((await search(owner, id)).status, 204);
-    assert.ok((await read(owner, id)).body.length > 0);
-    assert.deepEqual(
-      (await read(thief, id)).body,
-      [],
-      "what the search found is for its owner only",
-    );
+    const found = await search(owner, id);
+    assert.equal(found.status, 200);
+    assert.ok(found.body.length > 0);
   });
 
   it("does nothing with a made-up ticket", async () => {
     await limits({});
     const u = await user("madeup");
+    const before = await globalToday(api);
     const fake = crypto.randomUUID();
     assert.equal((await release(u, fake)).body, false);
     assert.equal((await start(u, fake)).body, false);
     assert.equal((await finish(u, fake)).body, false);
+    assert.equal(sqlState(await search(u, fake)), "42501");
     assert.equal(await userToday(api, u), 0);
+    assert.equal(await globalToday(api), before);
   });
 
   it("lets only one of a start and a release racing on the same ticket win", async () => {
@@ -649,15 +706,143 @@ describe("abandoned tickets", () => {
     assert.equal(await userToday(api, next), 1);
   });
 
+  it("keeps a started ticket counted after its lifetime, and closes it once", async () => {
+    await limits({ ticket_ttl_seconds: 90 });
+    const u = await user("stale-started");
+    const before = await globalToday(api);
+    const id = await begun(u);
+    await age(api, id, 120);
+    // Nobody swept it yet: the route's late answer still closes it, and nothing goes back
+    assert.equal((await release(u, id)).body, false);
+    assert.equal((await finish(u, id, "failed")).body, true);
+    assert.equal((await finish(u, id, "succeeded")).body, false);
+    assert.equal((await ticket(api, id)).state, "failed");
+    assert.equal(await userToday(api, u), 1);
+    assert.equal(await globalToday(api), before + 1);
+
+    const swept = await begun(u);
+    await age(api, swept, 120);
+    await granted(u);
+    assert.equal((await ticket(api, swept)).state, "expired");
+    assert.equal((await finish(u, swept)).body, false, "already closed");
+    assert.equal((await release(u, swept)).body, false, "never given back");
+    assert.equal(sqlState(await search(u, swept)), "42501");
+    assert.equal(await userToday(api, u), 3);
+    // Two started: the ticket reserved last does not count for the app until it starts
+    assert.equal(await globalToday(api), before + 2);
+  });
+
   it("refuses to start a ticket past its lifetime", async () => {
     await limits({ ticket_ttl_seconds: 90 });
     const u = await user("stale-start");
+    const before = await globalToday(api);
     const id = await granted(u);
     await age(api, id, 120);
     assert.equal((await start(u, id)).body, false);
+    assert.equal(
+      await globalToday(api),
+      before,
+      "a refused start must not count",
+    );
     // Never started, so it can still be given back; left open, the next reservation would
     // release it and move the counters other tests measure
     assert.equal((await release(u, id)).body, true);
+  });
+
+  it("leaves a started ticket open until its lifetime is over, so the route can still close it", async () => {
+    await limits({ ticket_ttl_seconds: 90 });
+    const u = await user("young-started");
+    const id = await begun(u);
+    await age(api, id, 80);
+    await granted(await user("young-next"));
+    assert.equal((await ticket(api, id)).state, "started");
+    assert.equal((await finish(u, id)).body, true);
+  });
+
+  it("takes the lifetime from the limits, for a started ticket and for a reserved one", async () => {
+    await limits({ ticket_ttl_seconds: 300 });
+    const u = await user("long-lived");
+    const running = await begun(u);
+    const waiting = await granted(u);
+    for (const id of [running, waiting]) await age(api, id, 120);
+    await granted(await user("long-lived-next"));
+    assert.equal((await ticket(api, running)).state, "started");
+    assert.equal((await ticket(api, waiting)).state, "reserved");
+    assert.equal((await start(u, waiting)).body, true);
+    // Closed here: the next test's shorter lifetime would sweep them
+    for (const id of [running, waiting]) {
+      assert.equal((await finish(u, id)).body, true);
+    }
+  });
+});
+
+describe("a count stays on the UTC day it was taken", () => {
+  const yesterday = () =>
+    new Date(Date.parse(today()) - 86_400_000).toISOString().slice(0, 10);
+  const userOn = async (u, day) => {
+    const { body } = await api.service(
+      `/rest/v1/usage?user_id=eq.${u.id}&day=eq.${day}&select=count`,
+    );
+    return body?.[0]?.count ?? 0;
+  };
+  // These rows go with the account when the tests end
+  const setUserOn = async (u, day, count) => {
+    const response = await api.service(
+      "/rest/v1/usage?on_conflict=user_id,day",
+      {
+        method: "POST",
+        body: { user_id: u.id, day, count },
+        prefer: "resolution=merge-duplicates",
+      },
+    );
+    assert.ok(
+      response.status < 300,
+      `could not set the count: ${response.status}`,
+    );
+  };
+  // A ticket reserved before midnight, on a day with one other attempt. The count its reservation
+  // left on today's row stays, as an attempt of today that giving this ticket back must not touch.
+  const fromYesterday = async (u, id) => {
+    const response = await api.service(
+      `/rest/v1/quota_reservations?id=eq.${id}`,
+      { method: "PATCH", body: { day: yesterday() } },
+    );
+    assert.ok(
+      response.status < 300,
+      `could not date the ticket: ${response.status}`,
+    );
+    await setUserOn(u, yesterday(), 2);
+  };
+
+  it("does not hold yesterday's attempts against an account today", async () => {
+    await limits({ user_daily: 3 });
+    const u = await user("new-day");
+    await setUserOn(u, yesterday(), 3);
+    await granted(u);
+    assert.equal(await userToday(api, u), 1);
+    assert.equal(await userOn(u, yesterday()), 3);
+  });
+
+  it("gives a released ticket back to the day it was reserved", async () => {
+    await limits({});
+    const u = await user("release-yesterday");
+    const id = await granted(u);
+    await fromYesterday(u, id);
+    assert.equal((await release(u, id)).body, true);
+    assert.equal(await userOn(u, yesterday()), 1);
+    assert.equal(await userToday(api, u), 1);
+  });
+
+  it("gives an abandoned ticket back to the day it was reserved", async () => {
+    await limits({ ticket_ttl_seconds: 90 });
+    const u = await user("swept-yesterday");
+    const id = await granted(u);
+    await fromYesterday(u, id);
+    await age(api, id, 120);
+    await granted(await user("swept-next"));
+    assert.equal((await ticket(api, id)).state, "released");
+    assert.equal(await userOn(u, yesterday()), 1);
+    assert.equal(await userToday(api, u), 1);
   });
 });
 
@@ -712,95 +897,127 @@ describe("old tickets", () => {
   });
 });
 
-describe("the public API offers no way around the counting", () => {
-  it("does not run a function that counts through GET", async () => {
+describe("who may call these functions", () => {
+  const someTicket = crypto.randomUUID();
+  const calls = (account) => [
+    ["reserve_quota", { account }],
+    ["start_rewrite", { account, reservation: someTicket }],
+    ["finish_rewrite", { account, reservation: someTicket, outcome: "failed" }],
+    ["release_quota", { account, reservation: someTicket }],
+    [
+      "search_style_passages",
+      {
+        account,
+        reservation: someTicket,
+        query_embedding: unitVector(0),
+        match_lang: "en",
+      },
+    ],
+  ];
+
+  it("refuses a signed-in user, for their own account as for anyone else's", async () => {
     await limits({});
-    const u = await user("get");
-    const response = await api.call("/rest/v1/rpc/reserve_quota", {
-      token: u.token,
-    });
-    assert.notEqual(response.status, 200);
+    const u = await user("direct");
+    const other = await user("direct-other");
+    for (const account of [u.id, other.id]) {
+      for (const [name, args] of calls(account)) {
+        const response = await rpc(api, u, name, args);
+        assert.equal(response.status, 403, name);
+        assert.equal(sqlState(response), "42501", name);
+      }
+    }
+    assert.equal(await userToday(api, u), 0);
+    assert.equal(await userToday(api, other), 0);
+  });
+
+  it("refuses a visitor", async () => {
+    const u = await user("direct-visitor");
+    for (const [name, args] of calls(u.id)) {
+      assert.equal(sqlState(await rpc(api, null, name, args)), "42501", name);
+    }
     assert.equal(await userToday(api, u), 0);
   });
 
-  // Only true where the API keeps its default setting: hosted, that setting cannot be read here
-  it("keeps what was counted when a caller asks to roll back", async () => {
+  it("refuses them whatever the outer query asks: no error quotes a passage", async () => {
     await limits({});
-    const u = await user("rollback");
-    const rollback = (name, body) =>
-      api.call(`/rest/v1/rpc/${name}`, {
+    const owner = await user("cast-owner");
+    const id = await begun(owner);
+    const response = await api.call(
+      "/rest/v1/rpc/search_style_passages?select=body::int",
+      {
         method: "POST",
-        token: u.token,
-        body,
-        prefer: "tx=rollback",
-      });
-
-    const reserved = await rollback("reserve_quota", {});
-    assert.equal(reserved.status, 200);
-    assert.equal(await userToday(api, u), 1);
-
-    const before = await globalToday(api);
-    await rollback("start_rewrite", { reservation: reserved.body });
-    assert.equal(await globalToday(api), before + 1);
-
-    await rollback("search_style_passages", {
-      reservation: reserved.body,
-      query_embedding: unitVector(0),
-      match_lang: "en",
-    });
+        token: owner.token,
+        body: {
+          account: owner.id,
+          reservation: id,
+          query_embedding: unitVector(0),
+          match_lang: "fr",
+        },
+      },
+    );
+    assert.equal(sqlState(response), "42501");
+    assert.doesNotMatch(JSON.stringify(response.body), /Test passage/);
     assert.equal(
-      sqlState(await search(u, reserved.body)),
-      "42501",
-      "the ticket's one search must stay used",
+      (await ticket(api, id)).searched_at,
+      null,
+      "the ticket's search stays unused",
     );
   });
 
-  // The API runs a call and its outer query in one transaction, so a failing outer query undoes
-  // what the function recorded, and a cast error quotes the value it failed on
-  it("gives a ticket ten passages at most, even through errors in the outer query", async () => {
-    await limits({});
-    const u = await user("cast");
-    const id = await begun(u);
-    const args = {
-      reservation: id,
-      query_embedding: unitVector(0),
-      match_lang: "fr",
-    };
-    const post = (name, query, body) =>
-      api.call(`/rest/v1/rpc/${name}?${query}`, {
-        method: "POST",
-        token: u.token,
-        body,
-      });
-
-    // The search hands over no text, whichever way its outer query goes
-    for (const query of ["select=body::int", "limit=1&offset=1", "body=eq.x"]) {
-      const response = await post("search_style_passages", query, args);
-      assert.doesNotMatch(JSON.stringify(response.body), /Test passage/);
-    }
-
-    if ((await ticket(api, id)).searched_at === null) {
-      assert.equal((await search(u, id, "fr")).status, 204);
-    }
-    assert.equal(sqlState(await search(u, id, "en")), "42501");
-
-    // Twelve French passages exist: asks for each one by name
-    const quoted = new Set();
-    for (let i = 0; i < 12; i++) {
-      const response = await post(
-        "read_style_passages",
-        `select=body::int&id=eq.dbtest-fr-${i}`,
-        { reservation: id },
+  it("is settled in the catalog: the server's identity only, whatever else exists", () => {
+    const rows = psql(`
+      select p.proname || ' ' || r.role || ' ' ||
+             has_function_privilege(r.role, p.oid, 'execute')
+      from pg_proc p
+      join pg_namespace n on n.oid = p.pronamespace
+      cross join (values ('public'), ('anon'), ('authenticated'), ('service_role')) r(role)
+      where n.nspname = 'public' and pg_get_function_arguments(p.oid) like 'account uuid%'
+      order by 1`);
+    const expected = [];
+    for (const name of [
+      "finish_rewrite",
+      "release_quota",
+      "reserve_quota",
+      "search_style_passages",
+      "start_rewrite",
+    ]) {
+      expected.push(
+        `${name} anon false`,
+        `${name} authenticated false`,
+        `${name} public false`,
+        `${name} service_role true`,
       );
-      const match = /Test passage [\w-]+\./.exec(JSON.stringify(response.body));
-      if (match) quoted.add(match[0]);
     }
-    assert.deepEqual(
-      [...quoted].sort(),
-      Array.from({ length: 10 }, (_, i) => `Test passage fr-${i}.`).sort(),
-      "only the ten passages the one search found",
+    assert.deepEqual(rows, expected);
+  });
+
+  it("takes the account from the call, so no account means no ticket", async () => {
+    for (const [name, args] of calls(null)) {
+      const response = await server(name, args);
+      assert.equal(sqlState(response), "28000", name);
+    }
+  });
+
+  it("refuses an account that does not exist, and counts nothing", async () => {
+    await limits({});
+    const before = await globalToday(api);
+    const ghost = crypto.randomUUID();
+    assert.equal(
+      sqlState(await server("reserve_quota", { account: ghost })),
+      "23503",
     );
-    assert.equal(sqlState(await search(u, id, "fr")), "42501");
+    assert.equal(await userToday(api, { id: ghost }), 0);
+    assert.equal(await globalToday(api), before);
+  });
+
+  it("does not run a function that counts through GET", async () => {
+    await limits({});
+    const u = await user("get");
+    const response = await api.service(
+      `/rest/v1/rpc/reserve_quota?account=${u.id}`,
+    );
+    assert.notEqual(response.status, 200);
+    assert.equal(await userToday(api, u), 0);
   });
 });
 

@@ -1,9 +1,10 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { ErrorCode } from "./types";
 
-// The limits themselves live in the database (public.quota_limits), so a direct call to the API
-// cannot change them. This file only talks to the four functions that move a ticket along:
-// reserve -> start -> finish, or reserve -> release when the model was never called.
+// The limits themselves live in the database (public.quota_limits). This file only talks to the
+// four functions that move a ticket along: reserve -> start -> finish, or reserve -> release when
+// the model was never called. Only the server's client may call them, for the account the route
+// read from the verified session, and the database checks that account owns the ticket each time.
 
 type Rpc = Pick<SupabaseClient, "rpc">;
 
@@ -18,7 +19,7 @@ const REFUSALS: Record<string, { code: ErrorCode; status: number }> = {
   "53401": { code: "quota_exceeded", status: 429 },
   "53402": { code: "global_quota_exceeded", status: 429 },
   "53403": { code: "global_quota_exceeded", status: 429 },
-  // A signed-in token with no user id. An expired one stops earlier, at the route's sign-in check.
+  // No account. A missing or expired session stops earlier, at the route's sign-in check.
   "28000": { code: "unauthorized", status: 401 },
   // The account was deleted while its session was still valid: its counter has no owner
   "23503": { code: "unauthorized", status: 401 },
@@ -40,10 +41,11 @@ function refusal(label: string, error: unknown): Refusal {
 
 // Takes one of the account's attempts before anything is spent
 export async function reserveQuota(
-  supabase: Rpc,
+  server: Rpc,
+  account: string,
 ): Promise<{ ok: true; ticket: string } | Refusal> {
   try {
-    const { data, error } = await supabase.rpc("reserve_quota");
+    const { data, error } = await server.rpc("reserve_quota", { account });
     if (error) return refusal("reserve_quota", error);
     if (typeof data === "string" && data) return { ok: true, ticket: data };
     console.error("reserve_quota failed", "no ticket");
@@ -56,11 +58,13 @@ export async function reserveQuota(
 // Starts the attempt: clears it for the style search and the model. The app-wide ceilings count here.
 // Anything but ok means: do not call the model.
 export async function startRewrite(
-  supabase: Rpc,
+  server: Rpc,
+  account: string,
   ticket: string,
 ): Promise<{ ok: true } | Refusal> {
   try {
-    const { data, error } = await supabase.rpc("start_rewrite", {
+    const { data, error } = await server.rpc("start_rewrite", {
+      account,
       reservation: ticket,
     });
     if (error) return refusal("start_rewrite", error);
@@ -75,12 +79,14 @@ export async function startRewrite(
 // Closes a started ticket and frees its slot. When this fails, the database closes the ticket
 // itself once its lifetime has passed, and the attempt stays counted either way.
 export async function finishRewrite(
-  supabase: Rpc,
+  server: Rpc,
+  account: string,
   ticket: string,
   outcome: Outcome,
 ): Promise<void> {
   try {
-    const { error } = await supabase.rpc("finish_rewrite", {
+    const { error } = await server.rpc("finish_rewrite", {
+      account,
       reservation: ticket,
       outcome,
     });
@@ -93,11 +99,13 @@ export async function finishRewrite(
 // Gives the attempt back. The database only agrees for a ticket that never started, so calling
 // this once the model may have been called gives nothing back.
 export async function releaseQuota(
-  supabase: Rpc,
+  server: Rpc,
+  account: string,
   ticket: string,
 ): Promise<void> {
   try {
-    const { error } = await supabase.rpc("release_quota", {
+    const { error } = await server.rpc("release_quota", {
+      account,
       reservation: ticket,
     });
     if (error) console.error("release_quota failed", codeOf(error));

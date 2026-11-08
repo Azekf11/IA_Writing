@@ -11,7 +11,6 @@ import {
   expiringCookies,
   seedHistory,
   sessionCookies,
-  sleep,
 } from "../lib.mjs";
 
 const SAMPLE =
@@ -205,13 +204,12 @@ export async function run(t) {
 
     await check(
       "auth",
-      "a session that nears its end during a rewrite still works on the next page",
+      "a session that nears its end during a rewrite is refreshed by the next page",
       async () => {
         mock.reset();
         const member = await newUser("ending");
-        // Past the 90 s margin only by the time the answer ends, so the route's bookkeeping refreshes
-        // the session and the new cookies cannot reach the browser. It comes back with the used token,
-        // past the 10 s anyone may reuse one, and Auth must still hand over the token that replaced it.
+        // Past the 90 s margin only by the time the answer ends. The route's bookkeeping uses the
+        // server's key and leaves the session alone, so the next page presents an unused refresh token.
         const cookie = await expiringCookies(env, member, 92);
         const answer = await fetch(`${t.base}/api/rewrite`, {
           method: "POST",
@@ -228,7 +226,6 @@ export async function run(t) {
           "refreshed on arrival: this check needs a faster start",
         );
         await answer.text();
-        await sleep(11_000);
         const next = await fetch(`${t.base}/en`, {
           headers: { Cookie: cookie },
         });

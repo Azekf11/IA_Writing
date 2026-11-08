@@ -1,5 +1,8 @@
 // Turns the audit's results into audit/report.md.
 
+export const SIMULATED =
+  "Simulated: the model in this run is a local stand-in, so its edits, timings and token counts are not Claude's.";
+
 const firstLine = (detail) => String(detail).split("\n")[0];
 
 function summary(results, issues) {
@@ -65,6 +68,8 @@ function everyCheck(results) {
 export function writeReport(results, issues, only = []) {
   return [
     "# Site audit",
+    "",
+    SIMULATED,
     "",
     ...(only.length
       ? [`**Partial run: only ${only.join(", ")}.** Run it whole to judge.`, ""]

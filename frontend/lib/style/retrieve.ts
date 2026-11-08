@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { getEmbedder, type Embedder } from "./embedder";
 import { guessLanguage, type Lang } from "./language";
+import { referencesEnabled } from "./switch";
 
 export type Reference = {
   id: string;
@@ -40,17 +41,16 @@ function onePerAuthor(rows: Reference[]): Reference[] {
 }
 
 // Style references are a bonus: any failure here must never block the rewrite itself.
-// The search needs the attempt's ticket: the database allows one search per ticket, so the
-// corpus cannot be read through the API without spending attempts. That takes two calls, one
-// that records what it found and one that reads it; the migration explains why.
+// The search needs a started ticket of this account: the database allows one search per ticket.
 export async function findReferences(
-  supabase: Pick<SupabaseClient, "rpc">,
+  server: Pick<SupabaseClient, "rpc">,
+  account: string,
   ticket: string,
   text: string,
   uiLocale: Lang,
   embedder: () => Embedder = getEmbedder,
 ): Promise<Reference[]> {
-  if (process.env.STYLE_REFERENCES === "off") return [];
+  if (!referencesEnabled()) return [];
 
   try {
     const vector = embedder().embed(text);
@@ -58,22 +58,15 @@ export async function findReferences(
 
     // The text's own language wins over the interface language
     const lang = guessLanguage(text) ?? uiLocale;
-    const signal = AbortSignal.timeout(SEARCH_MS);
-    const search = await supabase
+    const { data, error } = await server
       .rpc("search_style_passages", {
+        account,
         reservation: ticket,
         query_embedding: asVector(vector),
         match_lang: lang,
         match_count: CANDIDATES,
       })
-      .abortSignal(signal);
-    if (search.error) {
-      console.error("Style search failed", search.error.code);
-      return [];
-    }
-    const { data, error } = await supabase
-      .rpc("read_style_passages", { reservation: ticket })
-      .abortSignal(signal);
+      .abortSignal(AbortSignal.timeout(SEARCH_MS));
     if (error) {
       console.error("Style search failed", error.code);
       return [];

@@ -1,5 +1,6 @@
 import { RewriteError, streamEdits } from "./claude";
 import { EditCollector } from "./collect";
+import type { AttemptReport } from "./diagnostics";
 import type { MessageOptions } from "./prompt";
 import { encodeEvent, STREAM_TYPE, type StreamEvent } from "./protocol";
 import type { Outcome } from "./quota";
@@ -14,6 +15,8 @@ type Job = {
   signal: AbortSignal;
   // How long the request took before the model: session, quota and style search
   prepMs: number;
+  // Filled in as the attempt goes, for the logs
+  report?: AttemptReport;
   // Runs once, after the last byte is sent: how the attempt ended, and the edits to keep in the
   // history (null when there is nothing to keep)
   onSettled: (outcome: Outcome, history: Edit[] | null) => Promise<void>;
@@ -80,12 +83,11 @@ export function streamResponse(job: Job): {
       send({ type: "start", references: credits });
 
       const modelStarted = performance.now();
+      const droppedSoFar = () =>
+        Object.values(collector.dropped).reduce((sum, n) => sum + n, 0);
       // Ends the stream normally: the reader keeps every edit sent so far
       const done = (partial?: true) => {
-        const dropped = Object.values(collector.dropped).reduce(
-          (sum, n) => sum + n,
-          0,
-        );
+        const dropped = droppedSoFar();
         send({
           type: "done",
           dropped,
@@ -121,6 +123,7 @@ export function streamResponse(job: Job): {
           undefined,
           reader.signal,
           job.prepMs,
+          job.report,
         );
         if (reader.signal.aborted) {
           close();
@@ -163,6 +166,7 @@ export function streamResponse(job: Job): {
           close();
         }
       } finally {
+        if (job.report) job.report.dropped = droppedSoFar();
         try {
           await job.onSettled(outcome, history);
         } finally {

@@ -1,6 +1,8 @@
 import { isAuthRetryableFetchError } from "@supabase/supabase-js";
 import { after } from "next/server";
+import { readBody } from "@/lib/rewrite/body";
 import { RewriteError, requestEdits } from "@/lib/rewrite/claude";
+import { logAttempt, type AttemptReport } from "@/lib/rewrite/diagnostics";
 import { guardEdits } from "@/lib/rewrite/guard";
 import { locateEdits } from "@/lib/rewrite/locate";
 import {
@@ -20,11 +22,13 @@ import type {
 } from "@/lib/rewrite/types";
 import { findReferences } from "@/lib/style/retrieve";
 import { createClient } from "@/lib/supabase/server";
+import { createServiceClient } from "@/lib/supabase/service";
 
 // Claude can take a while on long texts
 export const maxDuration = 60;
 
-// 5000 characters of JSON-escaped text stay far below this; bigger bodies are abuse
+// The largest valid request, 5000 characters of text and 1500 of voice all written as \uXXXX, stays
+// just below this; bigger bodies are abuse
 const MAX_BODY_BYTES = 40_000;
 
 function fail(code: ErrorCode, status: number) {
@@ -40,9 +44,9 @@ const authIsDown = (error: { status?: number } | null) =>
 export async function POST(request: Request) {
   const started = performance.now();
 
-  // Read as text first so the size check happens before any parsing
-  const raw = await request.text().catch(() => "");
-  if (raw.length > MAX_BODY_BYTES) return fail("invalid_request", 413);
+  // Bounded while reading, before any parsing, session, quota or model
+  const raw = await readBody(request, MAX_BODY_BYTES);
+  if (raw === null) return fail("invalid_request", 413);
   let body: unknown = null;
   try {
     body = JSON.parse(raw);
@@ -52,13 +56,15 @@ export async function POST(request: Request) {
   const parsed = RewriteRequestSchema.safeParse(body);
   if (!parsed.success) return fail("invalid_request", 400);
 
-  // Fail closed: without auth there is no quota, so no one can spend the key
-  const supabase = await createClient();
-  if (!process.env.ANTHROPIC_API_KEY || !supabase) {
+  // Fail closed: without auth there is no quota, so no one can spend the key. The session client
+  // only says who is asking; everything else goes through the server's own client.
+  const session = await createClient();
+  const server = createServiceClient();
+  if (!process.env.ANTHROPIC_API_KEY || !session || !server) {
     return fail("not_configured", 503);
   }
 
-  const { data, error: authError } = await supabase.auth.getClaims();
+  const { data, error: authError } = await session.auth.getClaims();
   if (authIsDown(authError)) return fail("server_error", 500);
   const userId = data?.claims.sub;
   if (!userId) return fail("unauthorized", 401);
@@ -67,8 +73,11 @@ export async function POST(request: Request) {
   const options = { strength, voice };
 
   // The quota comes first: a refused request costs no embedding, no search and no model call
-  const reservation = await reserveQuota(supabase);
-  if (!reservation.ok) return fail(reservation.code, reservation.status);
+  const reservation = await reserveQuota(server, userId);
+  if (!reservation.ok) {
+    logAttempt(reservation.code);
+    return fail(reservation.code, reservation.status);
+  }
   const { ticket } = reservation;
 
   // A ticket exists from here on. Once the reader leaves, the platform may end the function except
@@ -79,26 +88,38 @@ export async function POST(request: Request) {
   try {
     // Nobody is waiting any more and nothing has started: the attempt goes back
     if (request.signal.aborted) {
-      after(() => releaseQuota(supabase, ticket));
+      logAttempt("released");
+      after(() => releaseQuota(server, userId, ticket));
       return new Response(null, { status: 499 });
     }
 
     // Starting counts the attempt against the app-wide ceilings. The style search comes after
     // it on purpose: the database only lets a started ticket read the corpus, once.
-    const start = await startRewrite(supabase, ticket);
+    const start = await startRewrite(server, userId, ticket);
     if (!start.ok) {
       // The model was not called, so the attempt goes back to the account
-      after(() => releaseQuota(supabase, ticket));
+      logAttempt(start.code);
+      after(() => releaseQuota(server, userId, ticket));
       return fail(start.code, start.status);
     }
-    const references = await findReferences(supabase, ticket, text, locale);
+    const references = await findReferences(
+      server,
+      userId,
+      ticket,
+      text,
+      locale,
+    );
 
     const prepared = performance.now();
+    const report: AttemptReport = {
+      prepMs: prepared - started,
+      references: references.length,
+    };
 
     // Only the text and the edits go into the history: the voice sample is never stored
     const saveHistory = async (edits: Edit[]) => {
       try {
-        const { error } = await supabase.from("rewrites").insert({
+        const { error } = await server.from("rewrites").insert({
           user_id: userId,
           original: text,
           edits,
@@ -116,9 +137,10 @@ export async function POST(request: Request) {
     // Runs once the answer is out, whichever way it was sent. The attempt was started by now, so
     // it stays counted whatever the outcome; closing the ticket frees its slot.
     const settle = async (outcome: Outcome, history: Edit[] | null) => {
+      logAttempt(outcome, { ...report, edits: history?.length ?? 0 });
       await Promise.all([
         history ? saveHistory(history) : null,
-        finishRewrite(supabase, ticket, outcome),
+        finishRewrite(server, userId, ticket, outcome),
       ]);
     };
 
@@ -129,6 +151,7 @@ export async function POST(request: Request) {
         options,
         signal: request.signal,
         prepMs: prepared - started,
+        report,
         onSettled: settle,
       });
       after(() => settled);
@@ -142,10 +165,12 @@ export async function POST(request: Request) {
         undefined,
         options,
         prepared - started,
+        report,
       );
       const modelled = performance.now();
       const { kept, dropped } = guardEdits(rawEdits);
       const edits = locateEdits(text, kept);
+      report.dropped = rawEdits.length - edits.length;
       if (Object.keys(dropped).length > 0)
         console.info("Edits dropped", dropped);
       // Every proposal failed a check: that is not "nothing to change"

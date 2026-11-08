@@ -11,6 +11,7 @@ import {
   it,
   vi,
 } from "vitest";
+import type { AttemptReport } from "@/lib/rewrite/diagnostics";
 import { EventReader, type StreamEvent } from "@/lib/rewrite/protocol";
 import { streamResponse } from "@/lib/rewrite/stream-response";
 import { closing, event, opening, piece, sse } from "./anthropic-sse";
@@ -55,6 +56,7 @@ beforeAll(async () => {
   vi.stubEnv("ANTHROPIC_BASE_URL", `http://127.0.0.1:${port}`);
   vi.stubEnv("ANTHROPIC_API_KEY", "test");
   vi.stubEnv("ANTHROPIC_AUTH_TOKEN", "");
+  vi.stubEnv("ANTHROPIC_MODEL", "");
 });
 
 afterAll(async () => {
@@ -349,5 +351,102 @@ describe("the model asked for", () => {
     await flow.settled;
     expect(requestBodies[1].model).toBe("another-model");
     vi.stubEnv("ANTHROPIC_MODEL", "");
+  });
+});
+
+describe("what the attempt reports, through the real SDK", () => {
+  const reporting = () => {
+    const report: AttemptReport = { prepMs: 12, references: 0 };
+    const { response, settled } = streamResponse({
+      text: TEXT,
+      references: [],
+      options: {},
+      signal: new AbortController().signal,
+      prepMs: 12,
+      report,
+      onSettled: vi.fn().mockResolvedValue(undefined),
+    });
+    return { report, response, settled };
+  };
+
+  it("fills in the model, the tokens, the ending and the timings of a whole answer", async () => {
+    answer = (response) => {
+      streaming(response);
+      response.end(sse([WHOLE], "end_turn"));
+    };
+    const { report, response, settled } = reporting();
+    await eventsOf(response);
+    await settled;
+    expect(report).toMatchObject({
+      model: "claude-sonnet-5-5",
+      stopReason: "end_turn",
+      inputTokens: 1,
+      outputTokens: 1,
+      prepMs: 12,
+      dropped: 0,
+    });
+    expect(report.modelMs).toBeGreaterThanOrEqual(0);
+    expect(report.firstEditMs).toBeGreaterThanOrEqual(0);
+    expect(report.firstEditMs).toBeLessThanOrEqual(report.modelMs as number);
+  });
+
+  it("keeps what the service said before a stream broke, and counts dropped edits", async () => {
+    answer = (response) => {
+      streaming(response);
+      // The second edit changes a figure, so the guard drops it
+      const dropped = edit("act now", "act 5 times");
+      response.write(opening() + piece(`{"edits":[${FIRST},${dropped},`));
+      setTimeout(() => response.destroy(), 20);
+    };
+    const { report, response, settled } = reporting();
+    await eventsOf(response);
+    await settled;
+    expect(report.inputTokens).toBe(1);
+    // The 0 of the first event is no count of what was written
+    expect(report.outputTokens).toBeUndefined();
+    expect(report.stopReason).toBeNull();
+    expect(report.dropped).toBe(1);
+    expect(report.firstEditMs).toBeGreaterThanOrEqual(0);
+    expect(report.modelMs).toBeGreaterThanOrEqual(report.firstEditMs as number);
+  });
+
+  it("keeps the output count of a stream that broke after the service gave it", async () => {
+    answer = (response) => {
+      streaming(response);
+      response.write(
+        opening() +
+          piece(`{"edits":[${FIRST}]}`) +
+          event("content_block_stop", { index: 0 }) +
+          event("message_delta", {
+            delta: { stop_reason: "end_turn", stop_sequence: null },
+            usage: { output_tokens: 77 },
+          }),
+      );
+      setTimeout(() => response.destroy(), 20);
+    };
+    const { report, response, settled } = reporting();
+    await eventsOf(response);
+    await settled;
+    expect(report.outputTokens).toBe(77);
+    expect(report.stopReason).toBe("end_turn");
+  });
+
+  it("has nothing to report on tokens when the call fails before any answer", async () => {
+    answer = (response) => {
+      response.writeHead(500, { "content-type": "application/json" });
+      response.end(
+        JSON.stringify({
+          type: "error",
+          error: { type: "api_error", message: "boom" },
+        }),
+      );
+    };
+    const { report, response, settled } = reporting();
+    await eventsOf(response);
+    await settled;
+    expect(report.model).toBe("claude-sonnet-5-5");
+    expect(report.inputTokens).toBeUndefined();
+    expect(report.firstEditMs).toBeUndefined();
+    expect(report.modelMs).toBeGreaterThanOrEqual(0);
   });
 });
