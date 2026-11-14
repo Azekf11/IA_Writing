@@ -1,5 +1,5 @@
 import type { Reference } from "@/lib/style/retrieve";
-import type { Strength } from "./schema";
+import type { Strength } from "@/lib/text";
 
 // Patterns and method follow the open-source "humanizer" skill (blader/humanizer), itself built on
 // Wikipedia's "Signs of AI writing". Some wording comes from humanizer's SKILL.md (Copyright (c) 2025

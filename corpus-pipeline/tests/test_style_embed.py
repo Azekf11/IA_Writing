@@ -1,4 +1,5 @@
 import json
+from pathlib import Path
 
 import numpy as np
 import pytest
@@ -101,6 +102,20 @@ def test_manifest_lists_dimensions_and_checksums(embedder):
     assert meta["dim"] == 8 and meta["vocab"] == 6
     assert meta["revision"] == MODEL_REVISION
     assert set(meta["sha256"]) == {"weights.i8", "scales.f32", "tokenizer.json"}
+
+
+def test_the_committed_embedder_still_produces_the_vectors_of_the_parity_fixture():
+    """The fixture is what TypeScript is held to, so it has to be what this code computes."""
+    root = Path(__file__).resolve().parents[2]
+    committed = Embedder.load(root / "frontend/data/embedder")
+    fixture = root / "frontend/tests/fixtures/embedder-parity.json"
+    cases = json.loads(fixture.read_text(encoding="utf-8"))
+    assert cases
+    for case in cases:
+        vector = committed.embed(case["text"])
+        assert vector is not None, case["text"]
+        # The tolerance of frontend/tests/embedder.test.ts
+        assert np.abs(vector - np.array(case["vector"])).max() < 1e-4, case["text"]
 
 
 def test_vector_literal_matches_the_pgvector_text_format():

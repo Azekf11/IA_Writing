@@ -24,12 +24,12 @@ import {
   seedPassages,
   setGlobalToday,
   setLimits,
+  siteCommands,
   sleep,
 } from "./lib.mjs";
 import { SIMULATED, writeReport } from "./report.mjs";
 
 const PORT = 3300;
-const MOCK_PORT = 4310;
 const only = process.argv.slice(2);
 const SUITES = [
   "pages",
@@ -106,32 +106,19 @@ async function main() {
     undo.push(() => removePassages(env));
     await seedPassages(env);
 
-    const mock = await startMockAnthropic(MOCK_PORT);
+    // A port of its own, so that the audit can run beside `npm run stand-in`
+    const mock = await startMockAnthropic(0);
     undo.push(() => mock.close());
 
     console.log("building the production site...");
-    const serverEnv = {
-      ...process.env,
-      NEXT_PUBLIC_SUPABASE_URL: env.API_URL,
-      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: env.PUBLISHABLE_KEY,
-      // The local stack's own key, in the build too: the pages suite looks for it in the bundles
-      SUPABASE_SECRET_KEY: env.SECRET_KEY,
-      ANTHROPIC_API_KEY: "audit-key-not-real",
-      ANTHROPIC_BASE_URL: `http://127.0.0.1:${MOCK_PORT}`,
-    };
-    const build = spawnSync("npm", ["run", "build"], {
-      env: serverEnv,
-      encoding: "utf8",
-    });
+    // The route's logs land next to the report: a failing check often needs them
+    const log = openSync(new URL("./server.log", import.meta.url), "w");
+    const site = siteCommands(env, mock.port, PORT, log);
+    const build = spawnSync(...site.build);
     if (build.status !== 0)
       throw new Error(`build failed:\n${build.stdout.slice(-1500)}`);
 
-    // The route's logs land next to the report: a failing check often needs them
-    const log = openSync(new URL("./server.log", import.meta.url), "w");
-    const server = spawn("npx", ["next", "start", "-p", String(PORT)], {
-      env: serverEnv,
-      stdio: ["ignore", log, log],
-    });
+    const server = spawn(...site.serve);
     undo.push(() => {
       server.kill();
       spawnSync("pkill", ["-f", `next start -p ${PORT}`]);

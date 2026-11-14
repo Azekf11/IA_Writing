@@ -8,6 +8,7 @@ import {
   expect,
   getUsage,
   historyRows,
+  insertRewrites,
   seedHistory,
   seedRewrite,
   sessionCookies,
@@ -18,6 +19,15 @@ import {
 
 const TEXT =
   "The mayor spoke for an hour. Nobody in the room moved at all until the very end of it.";
+
+const rowDelete = (page) =>
+  page.getByRole("button", { name: /^Delete the rewrite of/ }).first();
+const yesDelete = (page) =>
+  page.getByRole("button", { name: "Yes, delete", exact: true });
+const deleteRow = async (page) => {
+  await rowDelete(page).click();
+  await yesDelete(page).click();
+};
 
 export async function run(t) {
   const { env, mock } = t;
@@ -59,10 +69,7 @@ export async function run(t) {
           (await cards.first().textContent()).includes("Entry 3"),
           "newest is not first",
         );
-        await page
-          .getByRole("button", { name: "Delete", exact: true })
-          .first()
-          .click();
+        await deleteRow(page);
         await until(async () => (await cards.count()) === 2, { timeout: 4000 });
         expect((await cards.count()) === 2, "entry still listed");
         expect(
@@ -76,11 +83,10 @@ export async function run(t) {
       "history",
       "the empty state shows after the last delete",
       async () => {
-        for (let i = 0; i < 2; i++)
-          await page
-            .getByRole("button", { name: "Delete", exact: true })
-            .first()
-            .click();
+        for (const left of [2, 1]) {
+          await page.getByText(`${left} rewrite`).waitFor({ timeout: 4000 });
+          await deleteRow(page);
+        }
         await page.getByText("No rewrites yet.").waitFor({ timeout: 4000 });
       },
     );
@@ -96,17 +102,14 @@ export async function run(t) {
         await p.getByText("55 rewrites").waitFor();
         await p
           .getByText(
-            "Only your 50 most recent rewrites are listed and searched.",
+            "Your 50 most recent rewrites are listed. Search covers these only: load more to reach older ones.",
           )
           .waitFor();
         const cards = p.locator("main ul > li");
         expect((await cards.count()) === 50, `${await cards.count()} listed`);
 
         // One delete: the list fills up again from the older entries
-        await p
-          .getByRole("button", { name: "Delete", exact: true })
-          .first()
-          .click();
+        await deleteRow(p);
         await p.getByText("54 rewrites").waitFor({ timeout: 4000 });
         const refilled = await until(async () => (await cards.count()) === 50, {
           timeout: 4000,
@@ -124,6 +127,81 @@ export async function run(t) {
         await p.getByLabel("Your text").waitFor();
         await p.goBack();
         await p.getByText("No rewrites yet.").waitFor({ timeout: 4000 });
+        await c.ctx.close();
+      },
+    );
+
+    await check(
+      "history",
+      "Load more reaches every older entry, also those written at the same instant",
+      async () => {
+        const c = await member("hist-more");
+        // One insert, so all 120 share a date
+        await seedHistory(env, c.user, 120);
+        const p = await openPage(c.ctx, "history");
+        await p.goto(`${t.base}/en/history`, { waitUntil: "networkidle" });
+        const cards = p.locator("main ul > li");
+        const loadMore = p.getByRole("button", { name: "Load more" });
+        expect((await cards.count()) === 50, `${await cards.count()} listed`);
+
+        await loadMore.click();
+        await until(async () => (await cards.count()) === 100, {
+          timeout: 4000,
+        });
+        expect((await cards.count()) === 100, `${await cards.count()} listed`);
+        await loadMore.click();
+        await until(async () => (await cards.count()) === 120, {
+          timeout: 4000,
+        });
+        expect((await cards.count()) === 120, `${await cards.count()} listed`);
+        expect((await loadMore.count()) === 0, "more is still offered");
+
+        const listed = await p.locator("main ul > li p").allTextContents();
+        expect(new Set(listed).size === 120, `${new Set(listed).size} unique`);
+
+        // A delete refreshes the first page: what was loaded beyond it stays on the screen
+        await deleteRow(p);
+        await p.getByText("119 rewrites").waitFor({ timeout: 4000 });
+        await sleep(500);
+        const after = await p.locator("main ul > li p").allTextContents();
+        expect(after.length === 119, `${after.length} listed after a delete`);
+        expect(new Set(after).size === 119, "a row is listed twice");
+        expect(
+          (await historyRows(env, c.user)).length === 119,
+          "the database disagrees",
+        );
+        await c.ctx.close();
+      },
+    );
+
+    await check(
+      "history",
+      "Load more keeps the order of rows written at different times",
+      async () => {
+        const c = await member("hist-order");
+        const start = Date.UTC(2026, 9, 1, 8);
+        const rows = Array.from({ length: 53 }, (_, i) => ({
+          user_id: c.user.id,
+          original: `Dated row ${i}.`,
+          locale: "en",
+          // Microseconds in the date, which a Date would lose
+          created_at: new Date(start - i * 1000)
+            .toISOString()
+            .replace("Z", "123Z"),
+        }));
+        await insertRewrites(env, rows);
+        const p = await openPage(c.ctx, "history");
+        await p.goto(`${t.base}/en/history`, { waitUntil: "networkidle" });
+        await p.getByRole("button", { name: "Load more" }).click();
+        const cards = p.locator("main ul > li");
+        await until(async () => (await cards.count()) === 53, {
+          timeout: 4000,
+        });
+        const listed = await p.locator("main ul > li p").allTextContents();
+        expect(
+          listed.join() === rows.map((row) => row.original).join(),
+          "rows out of order, repeated or missing",
+        );
         await c.ctx.close();
       },
     );
@@ -148,7 +226,9 @@ export async function run(t) {
         for (const pause of [0, 300, 1000, 2000, 0, 300, 1000, 2000]) {
           await p.goto(`${t.base}/en`, { waitUntil: "networkidle" });
           await p.getByRole("link", { name: "History" }).click();
-          const reopen = p.getByRole("button", { name: "Reopen" });
+          const reopen = p.getByRole("button", {
+            name: /^Reopen the rewrite of/,
+          });
           await reopen.waitFor();
           await sleep(pause);
           await reopen.click();
@@ -171,26 +251,47 @@ export async function run(t) {
 
     await check(
       "history",
-      "a double click on a row's Delete removes that row, not the next one",
+      "a double click on a row's Delete only asks, on a line that is not under the pointer",
+      async () => {
+        const c = await member("dbl-ask");
+        await seedHistory(env, c.user, 3);
+        const p = await openPage(c.ctx, "history");
+        await p.goto(`${t.base}/en/history`, { waitUntil: "networkidle" });
+        const button = rowDelete(p);
+        const box = await button.boundingBox();
+        await button.dblclick();
+        const under = await yesDelete(p).boundingBox();
+        expect(under.y >= box.y + box.height, "Yes opens under the pointer");
+        const rows = await historyRows(env, c.user);
+        expect(rows.length === 3, `${rows.length} rows left`);
+        await c.ctx.close();
+      },
+    );
+
+    await check(
+      "history",
+      "a double click on a row's Yes removes that row, not the next one",
       async () => {
         const c = await member("dbl-row");
         await seedHistory(env, c.user, 6);
         const p = await openPage(c.ctx, "history");
         await p.goto(`${t.base}/en/history`, { waitUntil: "networkidle" });
         const cards = p.locator("main ul > li");
-        const box = await p
-          .getByRole("button", { name: "Delete", exact: true })
-          .first()
-          .boundingBox();
+        await rowDelete(p).click();
+        const box = await yesDelete(p).boundingBox();
         await p.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
         await p.mouse.down({ clickCount: 1 });
         await p.mouse.up({ clickCount: 1 });
-        // The list closes up, so the second click lands on the next row's Delete
+        // The list closes up, so the second click lands on whatever came under the pointer
         await until(async () => (await cards.count()) === 5, { timeout: 4000 });
         await p.mouse.down({ clickCount: 2 });
         await p.mouse.up({ clickCount: 2 });
         await sleep(300);
         expect((await cards.count()) === 5, `${await cards.count()} listed`);
+        expect(
+          (await yesDelete(p).count()) === 0,
+          "the second click opened another question",
+        );
         const rows = await historyRows(env, c.user);
         expect(rows.length === 5, `${rows.length} rows in the database`);
         await c.ctx.close();

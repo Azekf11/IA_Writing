@@ -22,6 +22,8 @@ const numbers = (original: string, replacement: string) =>
   expect(whyDrop(edit(original, replacement))).toBe("numbers_changed");
 const dropped = (original: string, replacement: string) =>
   expect(whyDrop(edit(original, replacement))).not.toBeNull();
+const reversed = (original: string, replacement: string) =>
+  expect(whyDrop(edit(original, replacement))).toBe("bounds_changed");
 
 describe("a denial and the answer that follows it", () => {
   it.each([
@@ -3035,6 +3037,210 @@ describe("honest edits it refuses, because the same shape can change a fact", ()
     "%s cannot become %s, as an amount before a currency",
     changed,
   );
+});
+
+describe("set phrases that state nothing", () => {
+  it.each([
+    ["Ne vous y trompez pas : le plan marche.", "Le plan marche."],
+    ["Ne vous y trompez pas, le plan marche.", "Le plan marche."],
+    ["Don't get me wrong, the plan works.", "The plan works."],
+    ["Don\u2019t get me wrong: the plan works.", "The plan works."],
+    ["Do not get me wrong, the plan works.", "The plan works."],
+    ["On ne saurait trop insister sur ce point.", "Ce point compte."],
+    ["On ne saurait trop insister : le plan marche.", "Le plan marche."],
+    ["I can't stress this enough: the plan works.", "The plan works."],
+    ["I cannot stress this enough: the plan works.", "The plan works."],
+    ["We can\u2019t stress that enough.", "It matters."],
+    ["I can't emphasize this enough.", "It matters."],
+  ])("%s denies nothing, so %s can stand", same);
+
+  it.each([
+    [
+      "Ne vous y trompez pas : le plan marche.",
+      "Vous vous y trompez : le plan marche.",
+    ],
+    ["Don't get me wrong, the plan works.", "Get me wrong, the plan works."],
+    [
+      "On ne saurait trop insister sur ce point.",
+      "On saurait trop insister sur ce point.",
+    ],
+    [
+      "I can't stress this enough: the plan works.",
+      "I can stress this enough: the plan works.",
+    ],
+    ["Ne vous y trompez pas : le plan ne marche pas.", "Le plan marche."],
+    ["Don't get me wrong, the plan does not work.", "The plan works."],
+    ["On ne saurait trop insister : il n'a pas pay\u00e9.", "Il a pay\u00e9."],
+    ["I can't stress this enough: the firm did not pay.", "The firm paid."],
+  ])("%s still cannot become %s", flipped);
+
+  it.each([
+    ["Pas besoin d'\u00eatre expert.", "Il faut \u00eatre expert."],
+    [
+      "Le succ\u00e8s ne doit rien au hasard.",
+      "Le succ\u00e8s est d\u00fb au hasard.",
+    ],
+    ["It's not rocket science.", "It's very hard."],
+    ["Don't underestimate the cost.", "The cost is trivial."],
+    ["You can't do this alone.", "You can do this alone."],
+    ["Don't get the wrong form.", "Get the wrong form."],
+    ["You can't stress it enough to break it.", "You can break it."],
+    ["Ne vous trompez pas de formulaire.", "Trompez-vous de formulaire."],
+  ])("what says something stays a denial: %s to %s", flipped);
+});
+
+describe("a bound next to a figure", () => {
+  it.each([
+    ["At least 40 people came.", "At most 40 people came."],
+    ["More than 40 people came.", "Fewer than 40 people came."],
+    ["More than 40 people came.", "Less than 40 people came."],
+    ["Over 40% agreed.", "Under 40% agreed."],
+    ["It costs above $5 a day.", "It costs below $5 a day."],
+    ["up to 40 people", "at least 40 people"],
+    ["less than 5 km", "more than 5 km"],
+    ["At least \u20ac 40", "Up to \u20ac 40"],
+    ["More than\n40 people", "Fewer than\n40 people"],
+    ["Plus de 40 personnes sont venues.", "Moins de 40 personnes sont venues."],
+    ["Au moins 40 personnes sont venues.", "Au plus 40 personnes sont venues."],
+    ["en moins de 5 minutes", "en plus de 5 minutes"],
+    ["jusqu'\u00e0 40 personnes", "au moins 40 personnes"],
+    ["jusqu\u2019\u00e0 40 personnes", "plus de 40 personnes"],
+    ["JUSQU'\u00c0 40 personnes", "AU MOINS 40 personnes"],
+    ["plus d'1,5 million d'euros", "moins d'1,5 million d'euros"],
+    ["plus d\u20191,5 million d'euros", "moins d\u20191,5 million d'euros"],
+    ["Plus de\u00a040\u00a0%", "Moins de\u00a040\u00a0%"],
+    ["d'au moins 40 personnes", "d'au plus 40 personnes"],
+  ])("%s cannot become %s", reversed);
+
+  it.each([
+    ["At least 40 people came.", "No fewer than 40 people came."],
+    ["More than 40 people came.", "Over 40 people came."],
+    ["Fewer than 40 people came.", "Less than 40 people came."],
+    ["up to 40 people", "at most 40 people"],
+    ["above $5", "over $5"],
+    ["below 5%", "under 5%"],
+    ["Plus de 40 personnes", "Au moins 40 personnes"],
+    ["Moins de 40 personnes", "Jusqu'\u00e0 40 personnes"],
+    ["au plus 40 personnes", "jusqu\u2019\u00e0 40 personnes"],
+  ])("%s goes the same way as %s", same);
+
+  it.each([
+    ["At least 40 people came.", "40 people came."],
+    ["40 people came.", "At least 40 people came."],
+    ["Au moins 40 personnes sont venues.", "40 personnes sont venues."],
+    ["40 personnes sont venues.", "Moins de 40 personnes sont venues."],
+  ])("a bound can go or come: %s to %s", same);
+
+  it.each([
+    ["nearly 40 people", "about 40 people"],
+    ["about 40 people", "nearly 40 people"],
+    ["environ 40 personnes", "pr\u00e8s de 40 personnes"],
+    ["About 40 people came.", "At least 40 people came."],
+    ["Environ 40 personnes sont venues.", "Moins de 40 personnes sont venues."],
+  ])("a word that only says about has no direction: %s to %s", same);
+
+  it.each([
+    ["no more than 40 people", "at most 40 people"],
+    ["no fewer than 40 people", "at least 40 people"],
+    ["no less than 40 people", "at least 40 people"],
+    ["not more than 40 people", "up to 40 people"],
+    ["not less than 40 people", "at least 40 people"],
+    ["nothing more than 40 people", "at most 40 people"],
+    ["Pas moins de 40 personnes", "Au moins 40 personnes"],
+    ["Pas plus de 40 personnes", "Au plus 40 personnes"],
+    [
+      "Le groupe n'a pas plus de 40 salari\u00e9s.",
+      "Le groupe a au plus 40 salari\u00e9s.",
+    ],
+    [
+      "Il n'y a pas moins de 40 salari\u00e9s.",
+      "Il y a plus de 40 salari\u00e9s.",
+    ],
+  ])("a denial turns the word around: %s is %s", same);
+
+  it.each([
+    ["no more than 40 people", "at least 40 people"],
+    ["no fewer than 40 people", "at most 40 people"],
+    ["not less than 40 people", "under 40 people"],
+    ["not more than 40 people", "over 40 people"],
+    ["Pas moins de 40 personnes", "Au plus 40 personnes"],
+    ["Pas plus de 40 personnes", "Au moins 40 personnes"],
+    [
+      "Le groupe n'a pas plus de 40 salari\u00e9s.",
+      "Le groupe a au moins 40 salari\u00e9s.",
+    ],
+  ])("so %s cannot become %s", reversed);
+
+  it("costs a suggestion when other words say the same thing the other way round", () => {
+    reversed("It stayed under 40.", "It failed to rise above 40.");
+    reversed("Il faut plus de 5 minutes.", "Impossible en moins de 5 minutes.");
+  });
+
+  it("leaves a lost denial to the denials", () => {
+    flipped("no more than 40 people", "more than 40 people");
+    flipped("Pas moins de 40 personnes", "Moins de 40 personnes");
+  });
+
+  it.each([
+    [
+      "At least 40 came, at most 40 left.",
+      "At most 40 left, at least 40 came.",
+    ],
+    [
+      "Au moins 40 entr\u00e9es, au plus 40 sorties.",
+      "Au plus 40 sorties, au moins 40 entr\u00e9es.",
+    ],
+    ["at least 40 and at most 50", "at most 50 and at least 40"],
+    ["At least 40 came, at most 40 left.", "40 came, at most 40 left."],
+  ])("compares by figure, in any order: %s to %s", same);
+
+  it.each([
+    [
+      "At least 40 came, at least 40 left.",
+      "At least 40 came, at most 40 left.",
+    ],
+    ["at least 40 and at most 50", "at most 40 and at least 50"],
+    [
+      "Au moins 40 entr\u00e9es, au moins 40 sorties.",
+      "Au moins 40 entr\u00e9es, au plus 40 sorties.",
+    ],
+  ])("each one keeps its direction: %s to %s", reversed);
+
+  it.each([
+    ["Moreover 40 people came.", "Under 40 people came."],
+    ["A turnover 40 times higher.", "Under 40 times higher."],
+    ["Il dit plus 40 euros.", "Il dit moins de 40 euros."],
+    ["Over the 40 days of Lent.", "Under the 40 days of Lent."],
+    ["Au plus tard 40 jours.", "Au moins 40 jours."],
+  ])("only a whole bound touching its figure counts: %s to %s", same);
+
+  describe("in the whole text, when the quote holds only the words", () => {
+    it.each([
+      ["At least 40 people came.", "At least", "At most"],
+      ["Over 40% agreed.", "Over", "Under"],
+      ["Au moins 40 personnes sont venues.", "Au moins", "Au plus"],
+      ["en moins de 5 minutes", "moins", "plus"],
+      ["Plus de 40 personnes.", "Plus de", "Moins de"],
+    ])("%s refuses %s to %s", (text, quote, by) => {
+      expect(locateEdits(text, [edit(quote, by)])).toEqual([]);
+    });
+
+    it.each([
+      ["At least 40 people came.", "At least", "No fewer than"],
+      ["At least 40 people came.", "At least", "About"],
+      ["Over 40% agreed.", "Over", "Above"],
+      ["Au moins 40 personnes sont venues.", "Au moins", "Plus de"],
+      ["Moins de 40 personnes.", "Moins de", "Environ"],
+    ])("%s allows %s to %s", (text, quote, by) => {
+      expect(locateEdits(text, [edit(quote, by)])).toHaveLength(1);
+    });
+
+    it("counts it as a quote that cannot be used", () => {
+      const collector = new EditCollector("At least 40 people came.");
+      expect(collector.add(edit("At least", "At most"))).toBeNull();
+      expect(collector.dropped).toEqual({ not_found: 1 });
+    });
+  });
 });
 
 describe("the cap on refused edits", () => {

@@ -29,7 +29,7 @@ const REFUSALS: Record<string, { code: ErrorCode; status: number }> = {
 const FAILED: Refusal = { ok: false, code: "server_error", status: 500 };
 
 // The error fields that are safe to log: a code, never a message
-const codeOf = (error: unknown): string =>
+export const codeOf = (error: unknown): string =>
   (error as { code?: string } | null)?.code || "unknown";
 
 function refusal(label: string, error: unknown): Refusal {

@@ -44,9 +44,11 @@ from public.style_passages group by 1, 2, 3 order by 1, 2, 3;
 **Each row stores** the passage (`body`), its vector (`embedding`, 256 dimensions), `author`, `title`,
 `lang`, `kind`, `n_words`, `source`, and where they apply `gutenberg_id`, `collection` (a Common Corpus
 collection or a web domain) and `year`. For web rows, `author` and `title` hold the domain. The app
-sends the browser author and title only, and the page shows authors. Browsers cannot read the table or
-call the search: the server reads ten candidates for one started attempt and places at most three in the
-prompt.
+sends the browser author and title only, and the page shows authors. Browsers cannot read the table. The
+app's search runs on the server, which reads ten candidates for one started attempt and places at most three
+in the prompt. Until `20261107000000` is applied
+([the rollout](DEPLOY.md#moving-a-running-site-to-server-only-operations)), a signed-in user can still call the
+older search and read ten passages per started ticket.
 
 ## How passages are chosen
 
@@ -146,8 +148,9 @@ change the vector size in a migration.
 **To switch the excerpts off without touching the data,** set `STYLE_REFERENCES=off` and deploy
 ([DEPLOY.md](DEPLOY.md#what-is-set-where)): no search, no excerpt in the prompt, no sources note on the home
 page, and the privacy page says so. **The public deployment should run this way until the sources have
-been reviewed.** The hosted rows are then neither read nor sent anywhere, and they stay in place: removing
-them is an intervention of its own.
+been reviewed.** The app then neither reads the hosted rows nor sends them anywhere, and they stay in place:
+removing them is an intervention of its own. The older search stays callable by a signed-in user until
+`20261107000000` is applied.
 
 To show the vector index without any corpus, `supabase/examples/vector_search_explain.sql` works on
 synthetic vectors in a transaction that it rolls back

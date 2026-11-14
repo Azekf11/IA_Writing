@@ -1,23 +1,23 @@
 import { z } from "zod";
-import { MAX_CHARS } from "@/lib/text";
+import { MAX_CHARS, MAX_VOICE_CHARS, STRENGTHS } from "@/lib/text";
 
-// How much the model may change: light touches only clear tells, thorough also weaker ones
-export const STRENGTHS = ["light", "standard", "thorough"] as const;
-export type Strength = (typeof STRENGTHS)[number];
-
-// A sample of the author's own writing, so edits can stay close to their voice
-export const MAX_VOICE_CHARS = 1500;
+// Half an emoji, which JSON can carry as an escape, is not text the API accepts. It would answer with
+// a 400, once the attempt has started, and the writer would be told the service is unavailable.
+const wellFormed = (value: string) => value.isWellFormed();
 
 export const RewriteRequestSchema = z.object({
   locale: z.enum(["en", "fr"]).default("en"),
   strength: z.enum(STRENGTHS).default("standard"),
-  voice: z.string().max(MAX_VOICE_CHARS).optional(),
+  voice: z.string().max(MAX_VOICE_CHARS).refine(wellFormed).optional(),
   // Ask for the answer edit by edit instead of all at once
   stream: z.boolean().default(false),
+  // False leaves this rewrite out of the history, and changes nothing else
+  keep: z.boolean().default(true),
   text: z
     .string()
     .refine((text) => text.trim().length > 0)
-    .refine((text) => text.length <= MAX_CHARS),
+    .refine((text) => text.length <= MAX_CHARS)
+    .refine(wellFormed),
 });
 
 // One edit as the model writes it

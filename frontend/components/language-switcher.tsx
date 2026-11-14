@@ -3,7 +3,7 @@
 import { useLocale, useTranslations } from "next-intl";
 import { Link, usePathname } from "@/i18n/navigation";
 import { routing } from "@/i18n/routing";
-import { cn } from "@/lib/cn";
+import { CHOSEN_IN_FORCED_COLORS, cn } from "@/lib/cn";
 
 export function LanguageSwitcher() {
   const t = useTranslations("LanguageSwitcher");
@@ -24,7 +24,7 @@ export function LanguageSwitcher() {
           className={cn(
             "rounded-md px-2.5 py-1.5 uppercase transition-colors",
             locale === current
-              ? "bg-accent text-accent-foreground"
+              ? `bg-accent text-accent-foreground ${CHOSEN_IN_FORCED_COLORS}`
               : "text-muted hover:text-foreground",
           )}
         >

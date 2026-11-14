@@ -1,7 +1,8 @@
+import { FOLD } from "@/lib/text";
 import { sameNumbers } from "./numbers";
 import type { RawEdit } from "./schema";
 import type { Edit } from "./types";
-import { sameUnits } from "./units";
+import { sameBounds, sameUnits } from "./units";
 
 type Range = [start: number, end: number];
 
@@ -9,10 +10,14 @@ const overlaps = (a: Range, b: Range) => a[0] < b[1] && b[0] < a[1];
 
 // A combining mark belongs to the letter before it, and a letter can take two code units.
 // An emoji's variation selector and keycap are marks too, but no word ends there.
-const ENDS_IN_WORD = /(?![\uFE0F\u20E3])[\p{L}\p{N}\p{M}]$/u;
 const STARTS_WITH_WORD = /^[\p{L}\p{N}\p{M}]/u;
-const wordEndsAt = (text: string, at: number) =>
-  ENDS_IN_WORD.test(text.slice(Math.max(0, at - 2), at));
+const NOT_A_WORD_END = new Set(["\uFE0F", "\u20E3"]);
+// The last character is taken apart and read forwards: V8 14.6 (Node 26.13, Chromium 156) misses
+// a letter of two code units in a class anchored at the end, as in /[\p{L}]$/u
+const wordEndsAt = (text: string, at: number) => {
+  const last = [...text.slice(Math.max(0, at - 2), at)].at(-1) ?? "";
+  return !NOT_A_WORD_END.has(last) && STARTS_WITH_WORD.test(last);
+};
 const wordStartsAt = (text: string, at: number) =>
   STARTS_WITH_WORD.test(text.slice(at, at + 2));
 const cutsWord = (text: string, at: number) =>
@@ -58,21 +63,6 @@ function findFree(text: string, quote: string, taken: Range[]): number {
   }
   return -1;
 }
-
-// Models often retype typography: curly quotes become straight, a non-breaking space a plain one
-const FOLD: Record<string, string> = {
-  "\u2018": "'",
-  "\u2019": "'",
-  "\u201c": '"',
-  "\u201d": '"',
-  "\u00a0": " ",
-  "\u202f": " ",
-  "\u2011": "-",
-};
-
-// The same text in plain typography, character for character
-export const plainTypography = (text: string) =>
-  Array.from(text, (ch) => FOLD[ch] ?? ch).join("");
 
 // Text folded to plain typography, with a map from each folded index back to the original.
 // Runs of whitespace become one space, so line breaks do not defeat a match.
@@ -147,17 +137,31 @@ const CLOSES = /[.,;:!?\u2026)\]}\u00bb\u201d\u2019"'\u2013\u2014*]/u;
 // French sets these apart with a no-break space, or the mark can start a line: that space stays
 const FRENCH_MARK = /[:;!?\u00bb]/u;
 
+// A word that fills its "**" or "*" takes them along, or "****" would stay behind. Not when another
+// edit holds them, or when they are all that keeps two words apart: "a*b*c".
+function withEmphasis(
+  text: string,
+  [start, end]: Range,
+  taken: Range[],
+): Range {
+  if (!text.slice(start, end).trim()) return [start, end];
+  let marks = 0;
+  while (text[start - marks - 1] === "*" && text[end + marks] === "*") marks++;
+  const wider: Range = [start - marks, end + marks];
+  return taken.some((other) => overlaps(wider, other)) ||
+    (endsLikeWord(text, wider[0]) && startsLikeWord(text, wider[1]))
+    ? [start, end]
+    : wider;
+}
+
 // What a deletion takes along, so no double space, blank block or stray space stays behind. The
 // whitespace around the word, quoted or not, comes down to one side's: the side with more line
 // breaks, so that paragraphs stay apart, or else the left one. A word alone on its line takes that
 // line, and the next line keeps its indent. A space goes when the word touched punctuation on the
 // other side. When another edit holds the right side, the left one goes instead, unless a line break
 // would go with it.
-function widenForDeletion(
-  text: string,
-  [start, end]: Range,
-  taken: Range[],
-): Range {
+function widenForDeletion(text: string, quoted: Range, taken: Range[]): Range {
+  const [start, end] = withEmphasis(text, quoted, taken);
   let wordStart = start;
   while (wordStart < end && isBlank(text[wordStart])) wordStart++;
   if (wordStart === end) return [start, end];
@@ -251,6 +255,75 @@ function keepOuterSpace(
   ];
 }
 
+const BETWEEN_LETTERS = /(?<=[\p{L}\p{M}])['\u2019](?=\p{L})/gu;
+
+const followApostrophes = (text: string, written: string) => {
+  const [straight, curly] = [text.includes("'"), text.includes("\u2019")];
+  return straight === curly
+    ? written
+    : written.replace(BETWEEN_LETTERS, curly ? "\u2019" : "'");
+};
+
+const count = (text: string, mark: string) => text.split(mark).length - 1;
+// Marks that open ahead of a word and close after one, two by two: not the inches of 5" and 6"
+const STRAIGHT_PAIRS =
+  /^[^"]*(?:(?<![\p{L}\p{N}])"(?!\s)[^"]+(?<!\s)"(?![\p{L}\p{N}])[^"]*)*$/u;
+const CURLY_PAIRS =
+  /^[^\u201c\u201d]*(?:\u201c[^\u201c\u201d]+\u201d[^\u201c\u201d]*)*$/u;
+
+// Only for a text with one style of double quote, in pairs. Guillemets count as another.
+function followQuotes(text: string, written: string): string {
+  if (/[\u00ab\u00bb]/.test(text)) return written;
+  const straight = count(text, '"');
+  const [opening, closing] = [count(text, "\u201c"), count(text, "\u201d")];
+  const curlyText = !straight && opening > 0 && opening === closing;
+  const straightText =
+    straight % 2 === 0 && straight > 0 && !opening && !closing;
+  if (curlyText && STRAIGHT_PAIRS.test(written)) {
+    return written.replace(/"([^"]+)"/g, "\u201c$1\u201d");
+  }
+  return straightText && CURLY_PAIRS.test(written)
+    ? written.replace(/[\u201c\u201d]/g, '"')
+    : written;
+}
+
+const FRENCH_GAP =
+  /(\u00ab)([ \u00a0\u202f])|([ \u00a0\u202f])([:;!?\u00bb])/gu;
+
+// A plain space goes back to the no-break one the text always sets beside that mark. Mark by mark,
+// since careful typesetting takes a narrow one before "!" and a wide one before ":".
+function followFrenchSpaces(text: string, written: string): string {
+  const spaces = new Map<string, string>();
+  for (const [, opener, inside, outside, closer] of text.matchAll(FRENCH_GAP)) {
+    const mark = opener ?? closer;
+    const space = inside ?? outside;
+    spaces.set(mark, (spaces.get(mark) ?? space) === space ? space : " ");
+  }
+  return written.replace(
+    /(?<=(\u00ab)) | (?=([:;!?\u00bb]))/g,
+    (_, opener, closer) => spaces.get(opener ?? closer) ?? " ",
+  );
+}
+
+// A model retypes typography its own way, so a replacement takes the style of the text it goes into,
+// wherever that text has just one. What stands next to it counts: "d'" before "Anne", "Prix " before ":".
+function typesetLike(
+  text: string,
+  [start, end]: Range,
+  replacement: string,
+): string {
+  const before = text.slice(Math.max(0, start - 1), start);
+  const after = text.slice(end, end + 1);
+  const spaced = followFrenchSpaces(
+    text,
+    followApostrophes(text, before + replacement + after),
+  );
+  return followQuotes(
+    text,
+    spaced.slice(before.length, spaced.length - after.length),
+  );
+}
+
 export type Located = Omit<Edit, "id">;
 
 // Where one edit's quote sits in the text, or null when it is absent or collides with a
@@ -286,11 +359,18 @@ export function locateOne(
   } else if (exact !== -1) {
     range = keepOuterSpace(text, range, edit);
   }
+  replacement = typesetLike(text, range, replacement);
   // The guard only saw the quote. This is the text the reader would get, and it must read the same
   // figures: the quote can leave a figure's digits out, the deletion join two of them, or the
-  // quote be the unit alone ("million" next to "3").
+  // quote be the unit alone ("million" next to "3") or the bound alone ("At least" before "40").
   const after = text.slice(0, range[0]) + replacement + text.slice(range[1]);
-  if (!sameNumbers(text, after) || !sameUnits(text, after)) return null;
+  if (
+    !sameNumbers(text, after) ||
+    !sameUnits(text, after) ||
+    !sameBounds(text, after)
+  ) {
+    return null;
+  }
   taken.push(range);
   return {
     ...edit,

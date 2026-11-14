@@ -1,0 +1,69 @@
+name: Route and database
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "supabase/**"
+      - "frontend/app/**"
+      - "frontend/components/**"
+      - "frontend/lib/**"
+      - "frontend/i18n/**"
+      - "frontend/messages/**"
+      - "frontend/proxy.ts"
+      - "frontend/next.config.ts"
+      - "frontend/audit/**"
+      - "frontend/package.json"
+      - "frontend/package-lock.json"
+      - ".github/workflows/integration.yml"
+  pull_request:
+    paths:
+      - "supabase/**"
+      - "frontend/app/**"
+      - "frontend/components/**"
+      - "frontend/lib/**"
+      - "frontend/i18n/**"
+      - "frontend/messages/**"
+      - "frontend/proxy.ts"
+      - "frontend/next.config.ts"
+      - "frontend/audit/**"
+      - "frontend/package.json"
+      - "frontend/package-lock.json"
+      - ".github/workflows/integration.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: frontend/package.json
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - uses: supabase/setup-cli@v3
+        with:
+          version: 2.113.0
+      # A throwaway stack on the runner, with the mailbox. No secret, no model: the audit has its stand-in
+      - run: supabase start -x studio,imgproxy,storage-api,realtime,edge-runtime,logflare,vector,postgres-meta,supavisor
+        working-directory: .
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      # The real route on the real functions. These two suites cover that join and measure no time;
+      # auth, rewrite and speed can fail on a slower machine, so they stay manual.
+      - run: npm run audit -- limits concurrency
+      - uses: actions/upload-artifact@v7
+        if: failure()
+        with:
+          name: audit-results
+          path: |
+            frontend/audit/report.md
+            frontend/audit/server.log
+          retention-days: 7

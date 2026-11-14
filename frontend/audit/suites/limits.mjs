@@ -225,6 +225,29 @@ export async function run(t) {
 
     await check(
       "limits",
+      "no credit left at the provider: no retry suggested, counted, nothing saved",
+      async () => {
+        const u = await member("no-credit");
+        const events = await stream(u.ctx, `FAILCREDIT ${TEXT}`);
+        const last = events.at(-1);
+        expect(
+          last.type === "error" && last.error === "provider_unavailable",
+          JSON.stringify(last),
+        );
+        await settled(u.user, 0, "failed", 0);
+
+        await u.page.goto(`${t.base}/en`, { waitUntil: "networkidle" });
+        await u.page.getByLabel("Your text").fill(`FAILCREDIT ${TEXT}`);
+        await u.page.getByRole("button", { name: "Rewrite" }).click();
+        await u.page
+          .getByText("Trying again now won't help")
+          .waitFor({ timeout: 6000 });
+        await u.ctx.close();
+      },
+    );
+
+    await check(
+      "limits",
       "a refusal is explained in the page, and stays counted",
       async () => {
         const u = await member("refusal");
@@ -268,7 +291,7 @@ export async function run(t) {
         const events = await stream(u.ctx, `ALLBAD ${TEXT}`);
         const last = events.at(-1);
         expect(
-          last.type === "error" && last.error === "upstream_error",
+          last.type === "error" && last.error === "no_usable_edit",
           JSON.stringify(last),
         );
         await settled(u.user, 0, "failed", 0);
@@ -277,7 +300,7 @@ export async function run(t) {
         await u.page.getByLabel("Your text").fill(`ALLBAD ${TEXT}`);
         await u.page.getByRole("button", { name: "Rewrite" }).click();
         await u.page
-          .getByText("The assistant could not answer.")
+          .getByText("No suggestion passed our checks")
           .waitFor({ timeout: 6000 });
         await u.ctx.close();
       },
@@ -304,7 +327,7 @@ export async function run(t) {
           `while writing: ${await result.textContent()}`,
         );
         await u.page
-          .getByRole("button", { name: "Edit the text" })
+          .getByRole("button", { name: "Back to the original text" })
           .waitFor({ timeout: 8000 });
         mock.state.gapMs = 350;
         await u.page.getByRole("button", { name: "Accept all" }).click();
@@ -424,6 +447,141 @@ export async function run(t) {
         });
         expect(mock.received.length === 0, "the model was called");
         await d.ctx.close();
+      },
+    );
+
+    // The page says all this before anyone presses Rewrite
+    await check(
+      "limits",
+      "a visitor reads what an email address gives, and nothing is spent",
+      async () => {
+        const ctx = await t.browser.newContext({
+          viewport: { width: 1280, height: 900 },
+        });
+        const page = await openPage(ctx, "visitor line");
+        const before = await globalToday(env);
+        mock.reset();
+        await withLimits(env, { user_daily: 5 }, async () => {
+          await page.goto(`${t.base}/en`, { waitUntil: "networkidle" });
+          await page
+            .getByText("Up to 5 free rewrites a day with an email address.")
+            .waitFor({ timeout: 5000 });
+        });
+        expect(mock.received.length === 0, "the model was called");
+        expect((await globalToday(env)) === before, "the day's count moved");
+        await ctx.close();
+      },
+    );
+
+    await check(
+      "limits",
+      "an account reads what is left, and the line moves after a rewrite",
+      async () => {
+        const e = await member("line");
+        await setUsage(env, e.user, 2);
+        await withLimits(env, { user_daily: 5 }, async () => {
+          mock.reset();
+          await e.page.goto(`${t.base}/en`, { waitUntil: "networkidle" });
+          await e.page
+            .getByText(/You have up to 3 of 5 attempts left today\. Resets at /)
+            .waitFor({ timeout: 5000 });
+          await e.page.getByLabel("Your text").fill(TEXT);
+          await e.page.getByRole("button", { name: "Rewrite" }).click();
+          await e.page
+            .getByText(/You have up to 2 of 5 attempts left today\./)
+            .waitFor({ timeout: 10000 });
+        });
+        expect(mock.received.length === 1, "one model call for one rewrite");
+        await e.ctx.close();
+      },
+    );
+
+    await check(
+      "limits",
+      "with the daily ceiling at 0 the page says paused before any click",
+      async () => {
+        const f = await member("paused");
+        mock.reset();
+        await withLimits(env, { global_daily: 0 }, async () => {
+          await f.page.goto(`${t.base}/en`, { waitUntil: "networkidle" });
+          await f.page
+            .getByText("Rewriting is paused for now.")
+            .waitFor({ timeout: 5000 });
+        });
+        expect(mock.received.length === 0, "the model was called");
+        expect((await getUsage(env, f.user)) === 0, "an attempt was counted");
+        await f.ctx.close();
+      },
+    );
+
+    await check(
+      "limits",
+      "at the monthly ceiling the page says paused too",
+      async () => {
+        const g = await member("paused-month");
+        const used = await globalThisMonth(env);
+        await withLimits(env, { global_monthly: used }, async () => {
+          await g.page.goto(`${t.base}/en`, { waitUntil: "networkidle" });
+          await g.page
+            .getByText("Rewriting is paused for now.")
+            .waitFor({ timeout: 5000 });
+        });
+        await g.ctx.close();
+      },
+    );
+
+    await check(
+      "limits",
+      "asking what is left spends nothing and says only three things",
+      async () => {
+        const h = await member("allowance");
+        await setUsage(env, h.user, 2);
+        const before = await globalToday(env);
+        mock.reset();
+        const response = await h.ctx.request.get(`${t.base}/api/rewrite`);
+        expect(response.status() === 200, `status ${response.status()}`);
+        expect(
+          response.headers()["cache-control"] === "no-store",
+          `cache-control ${response.headers()["cache-control"]}`,
+        );
+        const { allowance } = await response.json();
+        expect(
+          Object.keys(allowance).sort().join() === "limit,open,used",
+          `fields ${Object.keys(allowance)}`,
+        );
+        expect(allowance.used === 2, `used ${allowance.used}`);
+        expect(allowance.open === true, "closed for no reason");
+        expect(
+          (await getUsage(env, h.user)) === 2,
+          "the account's count moved",
+        );
+        expect(
+          (await ticketsOf(env, h.user)).length === 0,
+          "a ticket was taken",
+        );
+        expect((await globalToday(env)) === before, "the day's count moved");
+        expect(mock.received.length === 0, "the model was called");
+        await h.ctx.close();
+      },
+    );
+
+    await check(
+      "limits",
+      "half a character is refused before the session, the quota and the model",
+      async () => {
+        const before = await getUsage(env, a.user);
+        mock.reset();
+        const response = await a.ctx.request.post(`${t.base}/api/rewrite`, {
+          data: '{"text":"half \\ud83d of an emoji","locale":"en"}',
+          headers: { "content-type": "application/json" },
+        });
+        expect(response.status() === 400, `status ${response.status()}`);
+        expect(
+          (await response.json()).error === "invalid_request",
+          "wrong error code",
+        );
+        expect(mock.received.length === 0, "the model was called");
+        expect((await getUsage(env, a.user)) === before, "an attempt counted");
       },
     );
 

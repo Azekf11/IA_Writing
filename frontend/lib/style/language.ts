@@ -18,11 +18,9 @@ const FR = new Set(
 // after the apostrophe is a name, and English text has those too: L'Oréal, D'Souza.
 const ELIDED = /^(?:[lLdDnNcCjJsSmMtT]|[qQ][uU])'\p{Ll}/u;
 
-// Which language a text is written in, or null when it is too short or too close to call
-export function guessLanguage(text: string): Lang | null {
+// How many words a text has, and how many of them are function words of each language
+function count(text: string): { total: number; en: number; fr: number } {
   const words = text.replace(/\u2019/g, "'").match(/[\p{L}']+/gu) ?? [];
-  if (words.length < 8) return null;
-
   let en = 0;
   let fr = 0;
   for (const raw of words) {
@@ -35,8 +33,20 @@ export function guessLanguage(text: string): Lang | null {
     if (EN.has(word)) en++;
     if (FR.has(word)) fr++;
   }
-  if (en + fr < 3) return null;
+  return { total: words.length, en, fr };
+}
+
+// Which language a text is written in, or null when it is too short or too close to call
+export function guessLanguage(text: string): Lang | null {
+  const { total, en, fr } = count(text);
+  if (total < 8 || en + fr < 3) return null;
   if (fr > en * 1.3) return "fr";
   if (en > fr * 1.3) return "en";
   return null;
+}
+
+// Some sign of English and none of French, in a text of any length: "See you on Monday?"
+export function soundsEnglish(text: string): boolean {
+  const { en, fr } = count(text);
+  return en > 0 && fr === 0;
 }

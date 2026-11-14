@@ -6,44 +6,12 @@ import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
+export { localStack } from "./local-stack.mjs";
+
 const ROOT = fileURLToPath(new URL("../../", import.meta.url));
 
 // The folder holding this stack's supabase/config.toml
 const workdir = () => process.env.SUPABASE_WORKDIR ?? ROOT;
-
-// Reads the stack's URL and keys from `supabase status`. SUPABASE_WORKDIR selects another
-// local stack (a folder holding supabase/config.toml), for example a throwaway copy.
-export function localStack() {
-  const args = ["status", "-o", "env"];
-  if (process.env.SUPABASE_WORKDIR) {
-    args.push("--workdir", process.env.SUPABASE_WORKDIR);
-  }
-  let out;
-  try {
-    out = execFileSync("supabase", args, {
-      cwd: ROOT,
-      encoding: "utf8",
-      stdio: ["ignore", "pipe", "ignore"],
-    });
-  } catch {
-    throw new Error("`supabase status` failed: start the local stack first");
-  }
-  const env = {};
-  for (const line of out.split("\n")) {
-    const at = line.indexOf("=");
-    if (at > 0)
-      env[line.slice(0, at)] = line.slice(at + 1).replace(/^"|"$/g, "");
-  }
-  for (const key of ["API_URL", "PUBLISHABLE_KEY", "SECRET_KEY"]) {
-    if (!env[key]) throw new Error(`supabase status has no ${key}`);
-  }
-  // These tests change limits and counters: they must never reach a hosted project
-  const host = new URL(env.API_URL).hostname;
-  if (!["127.0.0.1", "localhost", "[::1]"].includes(host)) {
-    throw new Error(`refusing to run against ${host}: local stacks only`);
-  }
-  return env;
-}
 
 // call() acts as anonymous, or as a user when given their token; service() as the database owner
 export function client(env) {

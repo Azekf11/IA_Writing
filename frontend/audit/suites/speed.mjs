@@ -7,6 +7,7 @@ import {
   expect,
   median,
   percentile,
+  seedHistory,
   sessionCookies,
   warn,
 } from "../lib.mjs";
@@ -14,36 +15,58 @@ import {
 const TEXT =
   "The mayor spoke for an hour. Nobody in the room moved at all until the very end of it.";
 
+// Three cold loads, median reported, worst shift reported
+async function pageVitals(t, path, cookies = []) {
+  const runs = [];
+  for (let i = 0; i < 3; i++) {
+    const ctx = await t.browser.newContext({
+      viewport: { width: 1280, height: 800 },
+    });
+    await ctx.addCookies(cookies);
+    await ctx.addInitScript(vitalsInit);
+    const page = await openPage(ctx, "speed");
+    await page.goto(`${t.base}${path}`, { waitUntil: "load" });
+    await page.waitForTimeout(600);
+    runs.push(await readVitals(page));
+    await ctx.close();
+  }
+  const pick = (key) => median(runs.map((r) => r[key]));
+  const v = {
+    ttfb: pick("ttfb"),
+    fcp: pick("fcp"),
+    lcp: pick("lcp"),
+    cls: Math.max(...runs.map((r) => r.cls)),
+    tasks: pick("longTasks"),
+  };
+  expect(v.cls <= 0.1, `layout shift ${v.cls}`);
+  expect(v.lcp <= 2500, `largest paint at ${v.lcp} ms`);
+  return `ttfb ${v.ttfb} ms, first paint ${v.fcp} ms, largest paint ${v.lcp} ms, shift ${v.cls}, long tasks ${v.tasks}`;
+}
+
 export async function run(t) {
   const { env, mock } = t;
 
-  // ---- page vitals, three cold loads each, median reported ----
+  // ---- page vitals ----
   for (const path of ["/en", "/en/history", "/en/privacy"]) {
-    await check("speed", `${path}: loads fast and does not shift`, async () => {
-      const runs = [];
-      for (let i = 0; i < 3; i++) {
-        const ctx = await t.browser.newContext({
-          viewport: { width: 1280, height: 800 },
-        });
-        await ctx.addInitScript(vitalsInit);
-        const page = await openPage(ctx, "speed");
-        await page.goto(`${t.base}${path}`, { waitUntil: "load" });
-        await page.waitForTimeout(600);
-        runs.push(await readVitals(page));
-        await ctx.close();
-      }
-      const pick = (key) => median(runs.map((r) => r[key]));
-      const v = {
-        ttfb: pick("ttfb"),
-        fcp: pick("fcp"),
-        lcp: pick("lcp"),
-        cls: Math.max(...runs.map((r) => r.cls)),
-        tasks: pick("longTasks"),
-      };
-      expect(v.cls <= 0.1, `layout shift ${v.cls}`);
-      expect(v.lcp <= 2500, `largest paint at ${v.lcp} ms`);
-      return `ttfb ${v.ttfb} ms, first paint ${v.fcp} ms, largest paint ${v.lcp} ms, shift ${v.cls}, long tasks ${v.tasks}`;
-    });
+    await check("speed", `${path}: loads fast and does not shift`, () =>
+      pageVitals(t, path),
+    );
+  }
+
+  // A visitor's pages wait for nothing. A member's wait for the session, then for their list.
+  const reader = await createUser(env, "speed-member");
+  try {
+    await seedHistory(env, reader, 12);
+    const cookies = await sessionCookies(env, reader);
+    for (const path of ["/en", "/en/history"]) {
+      await check(
+        "speed",
+        `${path}, signed in: loads fast and does not shift`,
+        () => pageVitals(t, path, cookies),
+      );
+    }
+  } finally {
+    await deleteUser(env, reader);
   }
 
   await check(

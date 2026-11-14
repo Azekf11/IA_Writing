@@ -2,13 +2,19 @@ import type { Outcome } from "./quota";
 import type { ErrorCode } from "./types";
 
 // What one attempt leaves in the logs: the name of the model the route asked for (the default or
-// ANTHROPIC_MODEL), durations, the state it ended in, why the model stopped, the token counts the API
-// reported, and how many excerpts it used and edits it kept and dropped. Apart from that configured
-// name, only numbers and closed lists of words go in, so a text, an excerpt, a raw answer or a key has
-// no way into a log line.
+// ANTHROPIC_MODEL), durations, the state it ended in, why the model stopped, why the call failed, the
+// token counts the API reported, and how many excerpts it used and edits it kept and dropped. Apart
+// from that configured name, only numbers and closed lists of words go in, so a text, an excerpt, a
+// raw answer or a key has no way into a log line.
 export type AttemptReport = {
   model?: string;
   stopReason?: string | null;
+  // What the reader was told when the call failed
+  errorCode?: ErrorCode;
+  // What the API said about that failure, when it said anything
+  providerStatus?: number;
+  providerError?: string;
+  providerCause?: "credit" | "spend_limit" | "other";
   inputTokens?: number;
   outputTokens?: number;
   cacheReadTokens?: number;
@@ -40,6 +46,19 @@ const STOP_REASONS = new Set([
   "refusal",
 ]);
 
+// The API's own words for a failure. The SDK copies whatever the body holds, so these are checked too.
+const PROVIDER_ERRORS = new Set([
+  "invalid_request_error",
+  "authentication_error",
+  "billing_error",
+  "permission_error",
+  "not_found_error",
+  "rate_limit_error",
+  "timeout_error",
+  "api_error",
+  "overloaded_error",
+]);
+
 const whole = (value: unknown) =>
   typeof value === "number" ? Math.round(value) : undefined;
 
@@ -60,6 +79,28 @@ export function noteAnswer(
   report.cacheWriteTokens = whole(message.usage?.cache_creation_input_tokens);
 }
 
+// No credit and a spend limit reached are the same 400 invalid_request_error, so only the wording
+// tells them apart. It goes no further than this test: an API message can quote the request.
+function causeOf(message: string): AttemptReport["providerCause"] {
+  if (/credit balance/i.test(message)) return "credit";
+  if (/usage limits?/i.test(message)) return "spend_limit";
+  return "other";
+}
+
+// `api` is the error the SDK raised. A status or a type means the API itself answered: a lost
+// connection or the deadline has neither.
+export function noteFailure(
+  report: AttemptReport,
+  code: ErrorCode,
+  api?: { status?: number; type?: string | null; message: string },
+) {
+  report.errorCode = code;
+  if (!api || (api.status === undefined && !api.type)) return;
+  report.providerStatus = api.status;
+  report.providerError = api.type ?? undefined;
+  report.providerCause = causeOf(api.message);
+}
+
 // One line per request that reached the quota, ending in `state`: how a started attempt ended,
 // released when it was given back, or the code it was refused with
 export function logAttempt(
@@ -67,12 +108,19 @@ export function logAttempt(
   report: AttemptReport = {},
 ) {
   const stop = report.stopReason;
+  const providerError = report.providerError;
   console.info(
     "Rewrite attempt",
     JSON.stringify({
       state,
       model: report.model,
       stop_reason: stop && (STOP_REASONS.has(stop) ? stop : "other"),
+      error_code: report.errorCode,
+      provider_status: whole(report.providerStatus),
+      provider_error:
+        providerError &&
+        (PROVIDER_ERRORS.has(providerError) ? providerError : "other"),
+      provider_cause: report.providerCause,
       input_tokens: whole(report.inputTokens),
       output_tokens: whole(report.outputTokens),
       cache_read_tokens: whole(report.cacheReadTokens),

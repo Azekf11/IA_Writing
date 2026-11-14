@@ -1,5 +1,5 @@
 import { EventReader, STREAM_TYPE } from "./protocol";
-import type { Strength } from "./schema";
+import type { Strength } from "@/lib/text";
 import type {
   Edit,
   ErrorCode,
@@ -21,7 +21,9 @@ const CODES: Record<ClientErrorCode, true> = {
   not_configured: true,
   refused: true,
   busy: true,
+  provider_unavailable: true,
   upstream_error: true,
+  no_usable_edit: true,
   server_error: true,
   network: true,
 };
@@ -39,6 +41,8 @@ export type RewriteInput = {
   locale: string;
   strength?: Strength;
   voice?: string;
+  // Only ever false: a rewrite to keep sends nothing here
+  keep?: false;
 };
 
 // What the page learns while the model is still writing
@@ -53,7 +57,7 @@ const asCode = (value: unknown): ClientErrorCode =>
     ? (value as ClientErrorCode)
     : "upstream_error";
 
-const isAbort = (error: unknown) =>
+export const isAbort = (error: unknown) =>
   error instanceof DOMException && error.name === "AbortError";
 
 // Asks for a rewrite and hears about every edit as soon as it is ready.
@@ -83,8 +87,11 @@ export async function fetchEdits(
 
   // Refusals (no session, quota, bad input) come back as plain JSON before any streaming starts
   const body = await response.json().catch(() => null);
-  if (!response.ok) throw new RewriteRequestError(asCode(body?.error));
-  if (!body || !Array.isArray(body.edits)) {
+  // Not the route's own answer but a page from the platform, which can come before any attempt was
+  // taken: this code's message says nothing about what counted
+  if (body === null) throw new RewriteRequestError("server_error");
+  if (!response.ok) throw new RewriteRequestError(asCode(body.error));
+  if (!Array.isArray(body.edits)) {
     throw new RewriteRequestError("upstream_error");
   }
   return body as RewriteResponse;

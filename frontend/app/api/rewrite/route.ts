@@ -1,11 +1,16 @@
-import { isAuthRetryableFetchError } from "@supabase/supabase-js";
 import { after } from "next/server";
 import { readBody } from "@/lib/rewrite/body";
+import { READ_MS, readAllowance } from "@/lib/rewrite/allowance";
 import { RewriteError, requestEdits } from "@/lib/rewrite/claude";
-import { logAttempt, type AttemptReport } from "@/lib/rewrite/diagnostics";
+import {
+  logAttempt,
+  noteFailure,
+  type AttemptReport,
+} from "@/lib/rewrite/diagnostics";
 import { guardEdits } from "@/lib/rewrite/guard";
 import { locateEdits } from "@/lib/rewrite/locate";
 import {
+  codeOf,
   finishRewrite,
   releaseQuota,
   reserveQuota,
@@ -15,12 +20,15 @@ import {
 import { RewriteRequestSchema } from "@/lib/rewrite/schema";
 import { streamResponse } from "@/lib/rewrite/stream-response";
 import type {
+  Allowance,
+  AllowanceResponse,
   Edit,
   ErrorCode,
   ErrorResponse,
   RewriteResponse,
 } from "@/lib/rewrite/types";
 import { findReferences } from "@/lib/style/retrieve";
+import { authIsDown, claimsInTime } from "@/lib/supabase/auth-down";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 
@@ -35,11 +43,38 @@ function fail(code: ErrorCode, status: number) {
   return Response.json({ error: code } satisfies ErrorResponse, { status });
 }
 
-// The auth server being out of reach or overloaded does not mean the user signed out
-const authIsDown = (error: { status?: number } | null) =>
-  isAuthRetryableFetchError(error) ||
-  error?.status === 429 ||
-  (error?.status ?? 0) >= 500;
+// What the page says about the limits before anyone presses Rewrite. Only ever a hint: it takes no
+// ticket and counts nothing, the POST below stays the one that decides, and when anything is missing
+// or failing the line just goes away.
+export async function GET() {
+  let allowance: Allowance | null = null;
+  try {
+    const session = await createClient();
+    const server = createServiceClient();
+    if (process.env.ANTHROPIC_API_KEY && session && server) {
+      // Auth can stall where the reads cannot, on a key set not cached yet or a legacy token
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      const claims = await Promise.race([
+        session.auth.getClaims(),
+        new Promise<null>((done) => {
+          timer = setTimeout(done, READ_MS, null);
+        }),
+      ]).finally(() => clearTimeout(timer));
+      if (claims && !authIsDown(claims.error)) {
+        allowance = await readAllowance(
+          server,
+          session,
+          claims.data?.claims.sub ?? null,
+        );
+      }
+    }
+  } catch (error) {
+    console.error("Allowance read failed", codeOf(error));
+  }
+  return Response.json({ allowance } satisfies AllowanceResponse, {
+    headers: { "Cache-Control": "no-store" },
+  });
+}
 
 export async function POST(request: Request) {
   const started = performance.now();
@@ -60,16 +95,22 @@ export async function POST(request: Request) {
   // only says who is asking; everything else goes through the server's own client.
   const session = await createClient();
   const server = createServiceClient();
+  // Neither refusal below is the reader's doing, and each meets every request alike. No attempt line
+  // follows them, so this line is what tells an operator why.
   if (!process.env.ANTHROPIC_API_KEY || !session || !server) {
+    console.error("Rewrite refused", "not_configured");
     return fail("not_configured", 503);
   }
 
-  const { data, error: authError } = await session.auth.getClaims();
-  if (authIsDown(authError)) return fail("server_error", 500);
-  const userId = data?.claims.sub;
+  const claims = await claimsInTime(session);
+  if (!claims || authIsDown(claims.error)) {
+    console.error("Rewrite refused", "auth_down");
+    return fail("server_error", 500);
+  }
+  const userId = claims.data?.claims.sub;
   if (!userId) return fail("unauthorized", 401);
 
-  const { text, locale, strength, voice, stream } = parsed.data;
+  const { text, locale, strength, voice, stream, keep } = parsed.data;
   const options = { strength, voice };
 
   // The quota comes first: a refused request costs no embedding, no search and no model call
@@ -139,7 +180,8 @@ export async function POST(request: Request) {
     const settle = async (outcome: Outcome, history: Edit[] | null) => {
       logAttempt(outcome, { ...report, edits: history?.length ?? 0 });
       await Promise.all([
-        history ? saveHistory(history) : null,
+        // A rewrite the writer asked not to keep: only this write is skipped
+        history && keep ? saveHistory(history) : null,
         finishRewrite(server, userId, ticket, outcome),
       ]);
     };
@@ -175,7 +217,8 @@ export async function POST(request: Request) {
         console.info("Edits dropped", dropped);
       // Every proposal failed a check: that is not "nothing to change"
       if (edits.length === 0 && rawEdits.length > (dropped.unchanged ?? 0)) {
-        throw new RewriteError("upstream_error", 502);
+        noteFailure(report, "no_usable_edit");
+        throw new RewriteError("no_usable_edit", 502);
       }
 
       after(() => settle("succeeded", edits));

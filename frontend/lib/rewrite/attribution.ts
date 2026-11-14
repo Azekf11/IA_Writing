@@ -1,5 +1,5 @@
 import { figuresIn } from "./numbers";
-import { readFigure, readsAsUnit, sameUnitsOf } from "./units";
+import { readFigure, readsAsUnit, sameUnitsOf, touchesFigure } from "./units";
 
 // Capitalised words that open a sentence far more often than they name anything
 const COMMON = new Set(
@@ -19,14 +19,10 @@ function namesIn(text: string): Name[] {
   for (const match of text.matchAll(CAPITALISED)) {
     const word = match[0];
     const end = match.index + word.length;
-    const nextToFigure =
-      /\d[\s\p{Pd}]?$/u.test(
-        text.slice(Math.max(0, match.index - 2), match.index),
-      ) || /^\s?\d/.test(text.slice(end, end + 2));
     if (
       word.length < 2 ||
       COMMON.has(word) ||
-      (nextToFigure && readsAsUnit(word))
+      (touchesFigure(text, match.index, end) && readsAsUnit(word))
     ) {
       continue;
     }

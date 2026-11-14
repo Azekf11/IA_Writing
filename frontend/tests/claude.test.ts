@@ -84,24 +84,36 @@ describe("requestEdits", () => {
     }
   });
 
-  // The model was called, so the message must be the one that says the attempt counted
-  it("maps a rejected key to upstream_error, and says why in the logs", async () => {
+  // A retry would get the same answer, and the model was called, so the message must say both
+  it("maps a rejected key to provider_unavailable, and says why in the logs", async () => {
     const logged = vi.spyOn(console, "error").mockImplementation(() => {});
     for (const status of [401, 403]) {
       const create = vi.fn().mockRejectedValue(apiError(status));
       expect(await codeOf(requestEdits("a", [], fakeClient(create)))).toBe(
-        "upstream_error",
+        "provider_unavailable",
       );
     }
     expect(logged).toHaveBeenCalledWith("Anthropic credentials rejected");
   });
 
-  it("maps other API failures to upstream_error", async () => {
+  it("maps a request the API turns down to provider_unavailable, with a 503", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {});
-    const error = apiError(400);
-    const create = vi.fn().mockRejectedValue(error);
-    const code = await codeOf(requestEdits("a", [], fakeClient(create)));
-    expect(code).toBe("upstream_error");
+    for (const status of [400, 401, 402, 403, 404]) {
+      const create = vi.fn().mockRejectedValue(apiError(status));
+      await expect(
+        requestEdits("a", [], fakeClient(create)),
+      ).rejects.toMatchObject({ code: "provider_unavailable", status: 503 });
+    }
+  });
+
+  it("keeps upstream_error for the API failures a retry can get past", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    for (const status of [409, 413, 422, 500, 502, 503]) {
+      const create = vi.fn().mockRejectedValue(apiError(status));
+      await expect(
+        requestEdits("a", [], fakeClient(create)),
+      ).rejects.toMatchObject({ code: "upstream_error", status: 502 });
+    }
   });
 
   // An API error's message can quote the request, and so the text
@@ -321,7 +333,11 @@ describe("streamEdits", () => {
 
 // The real SDK over a canned HTTP answer, with no network: how it parses a stream and which
 // errors it raises are part of what these tests check. Stand-in clients cannot show that.
-function realClient(body: BodyInit, contentType = "text/event-stream") {
+function realClient(
+  body: BodyInit,
+  contentType = "text/event-stream",
+  status = 200,
+) {
   const requests: Record<string, unknown>[] = [];
   const client = new Anthropic({
     apiKey: "test",
@@ -329,7 +345,7 @@ function realClient(body: BodyInit, contentType = "text/event-stream") {
     fetch: async (_url, init) => {
       requests.push(JSON.parse(String(init?.body)));
       return new Response(body, {
-        status: 200,
+        status,
         headers: { "content-type": contentType },
       });
     },
@@ -518,6 +534,41 @@ describe("requestEdits, through the real SDK", () => {
       outputTokens: 340,
     });
     expect(report.modelMs).toBeGreaterThanOrEqual(0);
+  });
+
+  it("reports why a call failed, as a code, a status and closed lists", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const report: AttemptReport = {};
+    const body = JSON.stringify({
+      type: "error",
+      error: {
+        type: "invalid_request_error",
+        message: "Your credit balance is too low to access the API.",
+      },
+    });
+    const { client } = realClient(body, "application/json", 400);
+    expect(await codeOf(requestEdits("a d", [], client, {}, 0, report))).toBe(
+      "provider_unavailable",
+    );
+    expect(report).toMatchObject({
+      errorCode: "provider_unavailable",
+      providerStatus: 400,
+      providerError: "invalid_request_error",
+      providerCause: "credit",
+    });
+  });
+
+  it("reports a refusal by its code, with nothing from the API's errors", async () => {
+    const report: AttemptReport = {};
+    const client = realClient(
+      message(null, "refusal"),
+      "application/json",
+    ).client;
+    await codeOf(requestEdits("a d", [], client, {}, 0, report));
+    expect(report.errorCode).toBe("refused");
+    expect(report.providerStatus).toBeUndefined();
+    expect(report.providerError).toBeUndefined();
+    expect(report.providerCause).toBeUndefined();
   });
 
   it("keeps what an answer it refuses said about itself", async () => {

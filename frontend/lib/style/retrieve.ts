@@ -22,7 +22,7 @@ const CANDIDATES = 10;
 // Style references guide rhythm, not subject, so a loose match is still usable.
 export const MIN_SIMILARITY = 0.2;
 // A stalled search must not eat the model's time. Far above what a search normally takes.
-const SEARCH_MS = 5_000;
+export const SEARCH_MS = 5_000;
 
 const asVector = (values: number[]) =>
   `[${values.map((v) => v.toFixed(6)).join(",")}]`;

@@ -3,6 +3,7 @@ import { AuthApiError, AuthRetryableFetchError } from "@supabase/supabase-js";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { RewriteError } from "@/lib/rewrite/claude";
 import { MAX_CHARS } from "@/lib/text";
+import { fakeQuery, type QueryAnswer } from "./fake-query";
 
 const requestEdits = vi.fn();
 const streamEdits = vi.fn();
@@ -33,7 +34,7 @@ vi.mock("@/lib/supabase/service", () => ({
   createServiceClient: () => createServiceClient(),
 }));
 
-const { POST } = await import("@/app/api/rewrite/route");
+const { GET, POST } = await import("@/app/api/rewrite/route");
 
 const post = (body: unknown, signal?: AbortSignal) =>
   POST(
@@ -134,6 +135,32 @@ describe("POST /api/rewrite: input and access", () => {
       expect((await call(body)).status).toBe(400);
     }
     expect(requestEdits).not.toHaveBeenCalled();
+  });
+
+  // Written as escapes, as JSON.stringify writes them for a text that holds half an emoji
+  it.each([
+    ["the text", { text: "half \ud83d of an emoji" }],
+    ["the writing sample", { text: "Hello", voice: "half \ude00 of one" }],
+  ])(
+    "refuses half a character in %s before anything else runs",
+    async (_, body) => {
+      const response = await call(JSON.stringify(body));
+      expect(response.status).toBe(400);
+      expect(await response.json()).toEqual({ error: "invalid_request" });
+      expect(createClient).not.toHaveBeenCalled();
+      expect(createServiceClient).not.toHaveBeenCalled();
+      expect(findReferences).not.toHaveBeenCalled();
+      expect(requestEdits).not.toHaveBeenCalled();
+      expect(streamEdits).not.toHaveBeenCalled();
+    },
+  );
+
+  it("takes a whole emoji, sent as escapes as well", async () => {
+    const { client } = fakeSupabase();
+    connect(client);
+    requestEdits.mockResolvedValue([]);
+    const response = await call('{"text":"Well done \\ud83d\\ude00"}');
+    expect(response.status).toBe(200);
   });
 
   describe("the 40 000 byte bound", () => {
@@ -337,6 +364,41 @@ describe("POST /api/rewrite: input and access", () => {
     const response = await call({ text: "hello" });
     expect(response.status).toBe(401);
     expect(rpc).not.toHaveBeenCalled();
+  });
+
+  // A key set not cached yet, or a legacy token that goes to Auth, while Auth does not answer
+  describe("when the session check stalls", () => {
+    beforeEach(() =>
+      vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] }),
+    );
+    afterEach(() => vi.useRealTimers());
+
+    it("gives it 8 s, then answers as when the auth server is down, having spent nothing", async () => {
+      const { client, rpc } = fakeSupabase();
+      client.auth.getClaims = () => new Promise<never>(() => {});
+      connect(client);
+      const pending = post({ text: "hello", stream: true });
+      const after = async (ms: number) => {
+        await vi.advanceTimersByTimeAsync(ms);
+        return Promise.race([pending, Promise.resolve("still waiting")]);
+      };
+      expect(await after(7_999)).toBe("still waiting");
+      const response = await after(1);
+      expect(response).toBeInstanceOf(Response);
+      expect((response as Response).status).toBe(500);
+      expect(await (response as Response).json()).toEqual({
+        error: "server_error",
+      });
+      expect(rpc).not.toHaveBeenCalled();
+      expect(findReferences).not.toHaveBeenCalled();
+      expect(requestEdits).not.toHaveBeenCalled();
+      expect(streamEdits).not.toHaveBeenCalled();
+      expect(scheduled).toHaveLength(0);
+      expect(console.error).toHaveBeenCalledExactlyOnceWith(
+        "Rewrite refused",
+        "auth_down",
+      );
+    });
   });
 });
 
@@ -718,7 +780,7 @@ describe("POST /api/rewrite: one answer at a time", () => {
     ]);
     const response = await call({ text: "Hello world" });
     expect(response.status).toBe(502);
-    expect(await response.json()).toEqual({ error: "upstream_error" });
+    expect(await response.json()).toEqual({ error: "no_usable_edit" });
     expect(rpc).toHaveBeenCalledWith("finish_rewrite", {
       account: "user-1",
       reservation: "res-1",
@@ -1289,6 +1351,54 @@ describe("POST /api/rewrite: what an attempt leaves in the logs", () => {
     expect(logged.join("\n")).not.toContain(CANARY);
   });
 
+  describe("an answer whose every edit failed a check", () => {
+    const REFUSED = {
+      original: "missing",
+      replacement: "x",
+      reason: "not in the text",
+    };
+
+    it("names the reason in the line of a whole answer", async () => {
+      const { client } = fakeSupabase();
+      connect(client);
+      requestEdits.mockResolvedValue([REFUSED]);
+      await call({ text: "Hello world" });
+      expect(attempts()).toEqual([
+        expect.objectContaining({
+          state: "failed",
+          error_code: "no_usable_edit",
+        }),
+      ]);
+    });
+
+    it("names the reason in the line of a streamed answer", async () => {
+      const { client } = fakeSupabase();
+      connect(client);
+      streamEdits.mockImplementation(async (_t, _r, onEdit) => onEdit(REFUSED));
+      const sent = await lines(
+        await call({ text: "Hello world", stream: true }),
+      );
+      await Promise.all(scheduled.splice(0));
+      expect(sent.at(-1)).toEqual({ type: "error", error: "no_usable_edit" });
+      expect(attempts()).toEqual([
+        expect.objectContaining({
+          state: "failed",
+          error_code: "no_usable_edit",
+        }),
+      ]);
+    });
+
+    it("leaves no code on an answer that had nothing to change", async () => {
+      const { client } = fakeSupabase();
+      connect(client);
+      requestEdits.mockResolvedValue([
+        { original: "world", replacement: "world", reason: "fine" },
+      ]);
+      await call({ text: "Hello world" });
+      expect(attempts()[0].error_code).toBeUndefined();
+    });
+  });
+
   it("keeps the text, the voice, the excerpts and the answer out of every log line", async () => {
     for (const stream of [false, true]) {
       // The database quotes the row it refused
@@ -1337,5 +1447,387 @@ describe("POST /api/rewrite: what an attempt leaves in the logs", () => {
       ["History save failed", "42501"],
       ["History save failed", "42501"],
     ]);
+  });
+
+  // Every request fails the same way then, and nothing else would say why
+  describe("a refusal before the quota that is not the reader's doing", () => {
+    it.each([
+      ["the model's key", () => vi.stubEnv("ANTHROPIC_API_KEY", "")],
+      ["the secret key", () => createServiceClient.mockReturnValue(null)],
+      ["Supabase", () => createClient.mockResolvedValue(null)],
+    ])("leaves one line with its code, without %s", async (_case, unset) => {
+      connect(fakeSupabase().client);
+      unset();
+      expect((await call({ text: CANARY })).status).toBe(503);
+      expect(logged).toEqual(["Rewrite refused not_configured"]);
+    });
+
+    it.each([
+      ["out of reach", new AuthRetryableFetchError(CANARY, 0)],
+      ["overloaded", new AuthApiError(CANARY, 429, "over_request_rate_limit")],
+      ["failing", new AuthApiError(CANARY, 500, "unexpected_failure")],
+    ])(
+      "leaves one line with its code while Auth is %s, and nothing of its message",
+      async (_case, authError) => {
+        connect(fakeSupabase({ userId: null, authError }).client);
+        expect((await call({ text: "hello" })).status).toBe(500);
+        expect(logged).toEqual(["Rewrite refused auth_down"]);
+      },
+    );
+
+    it.each([
+      ["no session", null],
+      ["a rejected token", new AuthApiError("expired", 403, "bad_jwt")],
+    ])("leaves nothing for %s, which is no fault", async (_case, authError) => {
+      connect(fakeSupabase({ userId: null, authError }).client);
+      expect((await call({ text: "hello" })).status).toBe(401);
+      expect(logged).toEqual([]);
+    });
+  });
+});
+
+describe("POST /api/rewrite: a rewrite the writer asked not to keep", () => {
+  const closedAs = (outcome: string) => [
+    "finish_rewrite",
+    { account: "user-1", reservation: "res-1", outcome },
+  ];
+  const attemptLine = () =>
+    JSON.parse(
+      vi
+        .mocked(console.info)
+        .mock.calls.find(([label]) => label === "Rewrite attempt")![1],
+    );
+
+  it("writes no history for a whole answer, and the rest happens as usual", async () => {
+    const { client, insert, rpc } = fakeSupabase();
+    connect(client);
+    requestEdits.mockResolvedValue([EDIT]);
+    const response = await call({ text: "Hello world", keep: false });
+    expect(response.status).toBe(200);
+    expect((await response.json()).edits).toHaveLength(1);
+    expect(insert).not.toHaveBeenCalled();
+    expect(rpc).toHaveBeenCalledWith(...closedAs("succeeded"));
+    expect(names(rpc)).toEqual([
+      "reserve_quota",
+      "start_rewrite",
+      "finish_rewrite",
+    ]);
+    expect(attemptLine()).toMatchObject({ state: "succeeded", edits: 1 });
+  });
+
+  it("writes no history for a streamed answer", async () => {
+    const { client, insert, rpc } = fakeSupabase();
+    connect(client);
+    streamEdits.mockImplementation(async (_t, _r, onEdit) => onEdit(EDIT));
+    const response = await call({
+      text: "Hello world",
+      stream: true,
+      keep: false,
+    });
+    const sent = await lines(response);
+    await Promise.all(scheduled.splice(0));
+    expect(sent.map((event) => event.type)).toEqual(["start", "edit", "done"]);
+    expect(insert).not.toHaveBeenCalled();
+    expect(rpc).toHaveBeenCalledWith(...closedAs("succeeded"));
+    expect(attemptLine()).toMatchObject({ state: "succeeded", edits: 1 });
+  });
+
+  it("writes no history for an answer cut short after some edits", async () => {
+    const { client, insert, rpc } = fakeSupabase();
+    connect(client);
+    streamEdits.mockImplementation(async (_t, _r, onEdit) => {
+      onEdit(EDIT);
+      throw new RewriteError("upstream_error", 502);
+    });
+    const response = await call({
+      text: "Hello world",
+      stream: true,
+      keep: false,
+    });
+    const sent = await lines(response);
+    await Promise.all(scheduled.splice(0));
+    expect(sent.at(-1)).toMatchObject({ type: "done", partial: true });
+    expect(insert).not.toHaveBeenCalled();
+    expect(rpc).toHaveBeenCalledWith(...closedAs("failed"));
+    expect(attemptLine()).toMatchObject({ state: "failed", edits: 1 });
+  });
+
+  it("writes no history when the reader leaves after some edits", async () => {
+    const { client, insert, rpc } = fakeSupabase();
+    connect(client);
+    const controller = new AbortController();
+    streamEdits.mockImplementation(
+      async (_t, _r, onEdit, _o, _c, signal: AbortSignal) => {
+        onEdit(EDIT);
+        await new Promise<void>((resolve) =>
+          signal.addEventListener("abort", () => resolve()),
+        );
+      },
+    );
+    const response = await post(
+      { text: "Hello world", stream: true, keep: false },
+      controller.signal,
+    );
+    expect(response.status).toBe(200);
+    await vi.waitFor(() => expect(streamEdits).toHaveBeenCalled());
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    controller.abort();
+    await Promise.all(scheduled.splice(0));
+    expect(insert).not.toHaveBeenCalled();
+    expect(rpc).toHaveBeenCalledWith(...closedAs("cancelled"));
+    expect(attemptLine()).toMatchObject({ state: "cancelled", edits: 1 });
+  });
+
+  // The same request without the word: what every rewrite does unless told otherwise
+  it.each([
+    ["not said", {}],
+    ["said", { keep: true }],
+  ])("saves it when keeping is %s", async (_, body) => {
+    const { client, insert } = fakeSupabase();
+    connect(client);
+    requestEdits.mockResolvedValue([EDIT]);
+    await call({ text: "Hello world", ...body });
+    expect(insert).toHaveBeenCalledTimes(1);
+    expect(insert).toHaveBeenCalledWith(
+      expect.objectContaining({ original: "Hello world", edit_count: 1 }),
+    );
+  });
+
+  it("saves a streamed answer when keeping is not said", async () => {
+    const { client, insert } = fakeSupabase();
+    connect(client);
+    streamEdits.mockImplementation(async (_t, _r, onEdit) => onEdit(EDIT));
+    const response = await call({ text: "Hello world", stream: true });
+    await lines(response);
+    await Promise.all(scheduled.splice(0));
+    expect(insert).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([["false"], [0], [null]])(
+    "refuses %j as the choice",
+    async (keep) => {
+      const response = await call({ text: "Hello world", keep });
+      expect(response.status).toBe(400);
+      expect(await response.json()).toEqual({ error: "invalid_request" });
+      expect(createClient).not.toHaveBeenCalled();
+    },
+  );
+});
+
+describe("GET /api/rewrite: what the page may say about the limits", () => {
+  const LIMITS = { user_daily: 5, global_daily: 15, global_monthly: 300 };
+  const TODAY = "2026-03-15";
+  const FAILED: QueryAnswer = { data: null, error: { code: "57014" } };
+
+  beforeEach(() => {
+    vi.useFakeTimers({
+      toFake: ["Date"],
+      now: new Date(`${TODAY}T12:00:00Z`),
+    });
+  });
+
+  afterEach(() => vi.useRealTimers());
+
+  function fakeReads({
+    userId = "user-1" as string | null,
+    authError = null as Error | null,
+    limits = LIMITS as Partial<typeof LIMITS>,
+    days = [] as { day: string; count: number }[],
+    own = null as { count: number } | null,
+    fails = null as "quota_limits" | "usage_global" | "usage" | null,
+  } = {}) {
+    const answer = (table: string, data: unknown) =>
+      fakeQuery(fails === table ? FAILED : { data, error: null });
+    const reads = {
+      quota_limits: answer("quota_limits", limits),
+      usage_global: answer("usage_global", days),
+      usage: answer("usage", own),
+    };
+    const from = () => vi.fn((table: keyof typeof reads) => reads[table]);
+    const rpc = vi.fn();
+    const server = { from: from(), rpc };
+    const session = {
+      from: from(),
+      rpc,
+      auth: {
+        getClaims: async () => ({
+          data: userId ? { claims: { sub: userId } } : null,
+          error: authError,
+        }),
+      },
+    };
+    createClient.mockResolvedValue(session);
+    createServiceClient.mockReturnValue(server);
+    return { reads, server, session, rpc };
+  }
+
+  const allowance = async () => {
+    const response = await GET();
+    expect(response.status).toBe(200);
+    expect(response.headers.get("cache-control")).toBe("no-store");
+    return (await response.json()).allowance;
+  };
+
+  it("tells a visitor the limit, and reads no usage", async () => {
+    const { reads, session } = fakeReads({ userId: null });
+    expect(await allowance()).toEqual({ limit: 5, used: null, open: true });
+    expect(session.from).not.toHaveBeenCalled();
+    expect(reads.usage.select).not.toHaveBeenCalled();
+  });
+
+  it("tells an account its own count, read through its session and for its own id", async () => {
+    const { reads, server, session } = fakeReads({ own: { count: 3 } });
+    expect(await allowance()).toEqual({ limit: 5, used: 3, open: true });
+    expect(session.from.mock.calls).toEqual([["usage"]]);
+    expect(server.from).not.toHaveBeenCalledWith("usage");
+    expect(reads.usage.eq.mock.calls).toEqual([
+      ["user_id", "user-1"],
+      ["day", TODAY],
+    ]);
+  });
+
+  it("treats a rejected token as a visitor", async () => {
+    const { session } = fakeReads({
+      userId: null,
+      authError: new AuthApiError("expired", 403, "bad_jwt"),
+    });
+    expect(await allowance()).toEqual({ limit: 5, used: null, open: true });
+    expect(session.from).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    [
+      "the pause, a daily ceiling of 0",
+      { limits: { ...LIMITS, global_daily: 0 } },
+    ],
+    ["a monthly ceiling of 0", { limits: { ...LIMITS, global_monthly: 0 } }],
+    ["no attempts per account", { limits: { ...LIMITS, user_daily: 0 } }],
+    ["today's ceiling reached", { days: [{ day: TODAY, count: 15 }] }],
+    [
+      "the month's ceiling reached",
+      {
+        days: [
+          { day: "2026-03-01", count: 295 },
+          { day: TODAY, count: 5 },
+        ],
+      },
+    ],
+  ])("says closed on %s", async (_, setting) => {
+    fakeReads(setting);
+    expect((await allowance()).open).toBe(false);
+  });
+
+  it("says open below the ceilings", async () => {
+    fakeReads({ days: [{ day: TODAY, count: 14 }] });
+    expect((await allowance()).open).toBe(true);
+  });
+
+  it("lets out the three fields and none of the app-wide numbers", async () => {
+    fakeReads({
+      own: { count: 2 },
+      limits: { user_daily: 5, global_daily: 777, global_monthly: 8888 },
+      days: [{ day: TODAY, count: 99 }],
+    });
+    const response = await GET();
+    const body = await response.text();
+    expect(Object.keys(JSON.parse(body).allowance).sort()).toEqual([
+      "limit",
+      "open",
+      "used",
+    ]);
+    expect(body).not.toMatch(/777|8888|99/);
+  });
+
+  describe("goes away when anything is missing", () => {
+    // Unlike the POST it writes no line for that: it answers every page view, and it is public
+    it("without the secret key", async () => {
+      fakeReads();
+      createServiceClient.mockReturnValue(null);
+      expect(await allowance()).toBeNull();
+      expect(console.error).not.toHaveBeenCalled();
+    });
+
+    it("without Supabase", async () => {
+      fakeReads();
+      createClient.mockResolvedValue(null);
+      expect(await allowance()).toBeNull();
+      expect(console.error).not.toHaveBeenCalled();
+    });
+
+    // The POST would answer not_configured: a line saying five a day would be wrong
+    it("without the model's key", async () => {
+      vi.stubEnv("ANTHROPIC_API_KEY", "");
+      fakeReads();
+      expect(await allowance()).toBeNull();
+      expect(console.error).not.toHaveBeenCalled();
+    });
+
+    it("when the auth server is out of reach", async () => {
+      const { server } = fakeReads({
+        userId: null,
+        authError: new AuthRetryableFetchError("down", 503),
+      });
+      expect(await allowance()).toBeNull();
+      expect(server.from).not.toHaveBeenCalled();
+      expect(console.error).not.toHaveBeenCalled();
+    });
+
+    // A key set not cached yet, or a legacy token that goes to Auth, while Auth does not answer
+    it("when the auth server does not answer within the reads' 3 s", async () => {
+      vi.useFakeTimers({
+        toFake: ["Date", "setTimeout", "clearTimeout"],
+        now: new Date(`${TODAY}T12:00:00Z`),
+      });
+      const { server, session } = fakeReads();
+      session.auth.getClaims = () => new Promise<never>(() => {});
+      const pending = GET();
+      const after = async (ms: number) => {
+        await vi.advanceTimersByTimeAsync(ms);
+        return Promise.race([pending, Promise.resolve("still waiting")]);
+      };
+      expect(await after(2_999)).toBe("still waiting");
+      const response = await after(1);
+      expect(response).toBeInstanceOf(Response);
+      expect(await (response as Response).json()).toEqual({ allowance: null });
+      expect(server.from).not.toHaveBeenCalled();
+      expect(session.from).not.toHaveBeenCalled();
+      expect(console.error).not.toHaveBeenCalled();
+    });
+
+    it.each(["quota_limits", "usage_global", "usage"] as const)(
+      "when reading %s fails, and logs only the code",
+      async (fails) => {
+        fakeReads({ fails });
+        expect(await allowance()).toBeNull();
+        expect(console.error).toHaveBeenCalledWith(
+          "Allowance read failed",
+          "57014",
+        );
+      },
+    );
+
+    it("when creating a client throws, and logs no message", async () => {
+      createClient.mockRejectedValue(new Error("SECRET detail"));
+      expect(await allowance()).toBeNull();
+      expect(console.error).toHaveBeenCalledWith(
+        "Allowance read failed",
+        "unknown",
+      );
+    });
+  });
+
+  it("spends nothing: no quota function, no write, no excerpt search, no model, no attempt line", async () => {
+    const { rpc } = fakeReads({ own: { count: 1 } });
+    await allowance();
+    expect(rpc).not.toHaveBeenCalled();
+    expect(findReferences).not.toHaveBeenCalled();
+    expect(requestEdits).not.toHaveBeenCalled();
+    expect(streamEdits).not.toHaveBeenCalled();
+    expect(scheduled).toHaveLength(0);
+    expect(
+      vi
+        .mocked(console.info)
+        .mock.calls.filter(([label]) => label === "Rewrite attempt"),
+    ).toEqual([]);
   });
 });

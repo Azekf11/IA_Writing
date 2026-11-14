@@ -20,12 +20,41 @@
     "label": "Your text",
     "placeholder": "Paste or type your text here...",
     "words": "{count, plural, one {# word} other {# words}}",
-    "characters": "{count} / {max} characters",
+    "characters": "{count, number} / {max, number} characters",
     "rewrite": "Rewrite",
     "rewriting": "Rewriting...",
-    "tooLong": "This text is too long. The limit is {max} characters.",
+    "tooLong": "This text is too long. The limit is {max, number} characters.",
+    "checkTooLong": "This text is too long, even for the free check. Its limit is {max, number} characters.",
     "example": "Try an example",
     "exampleText": "In today's fast-paced world, it is crucial to understand that effective communication plays a pivotal role in fostering meaningful connections. Moreover, it is important to note that listening is not just a skill, but a journey. In conclusion, by embracing these principles, we can unlock our full potential.",
+    "exampleEdits": [
+      {
+        "original": "In today's fast-paced world, it is crucial to understand that effective communication",
+        "replacement": "Effective communication",
+        "reason": "Drops a stock opening that says nothing about the subject."
+      },
+      {
+        "original": "plays a pivotal role in fostering meaningful connections",
+        "replacement": "helps people connect",
+        "reason": "Says what it does, without the inflated wording."
+      },
+      {
+        "original": "Moreover, it is important to note that listening",
+        "replacement": "Listening",
+        "reason": "Filler: the sentence can simply say it."
+      },
+      {
+        "original": "is not just a skill, but a journey",
+        "replacement": "is a skill you keep working on",
+        "reason": "Drops a contrast staged for effect."
+      },
+      {
+        "original": "In conclusion, by embracing these principles, we can unlock our full potential.",
+        "replacement": "These principles help us do our best work.",
+        "reason": "Replaces a stock closing line with a plain one."
+      }
+    ],
+    "check": "Free check",
     "options": "Options",
     "strength": "How much to change",
     "strengths": {
@@ -34,15 +63,27 @@
       "thorough": "Thorough"
     },
     "strengthHint": {
-      "light": "Only the clearest tells.",
-      "standard": "Clear tells, and weaker ones when they pile up.",
-      "thorough": "Weaker tells and flat phrasing too."
+      "light": "Only the most obvious stock phrases.",
+      "standard": "Obvious stock phrases, and subtler ones when they pile up.",
+      "thorough": "Subtler stock phrases and flat wording too."
     },
     "voice": "Your own writing (optional)",
+    "voiceShort": "Your own writing",
     "voiceHint": "Paste a few lines you wrote. Edits will stay close to how you write. Sent with this request, not saved.",
     "voicePlaceholder": "A paragraph from an email, an essay or a post of yours...",
-    "voiceCount": "{count} / {max}",
-    "stop": "Stop"
+    "voiceCount": "{count, number} / {max, number}",
+    "dontKeep": "Do not keep this text in my history",
+    "dontKeepShort": "Not kept",
+    "dontKeepHint": "The text still goes to Anthropic for the suggestions, and the attempt still counts. The review then exists only on this page.",
+    "stop": "Stop",
+    "backToReview": "Back to the review",
+    "notice": "Your text goes to Anthropic for the suggestions and stays in your history until you delete it. The free check runs in your browser and sends nothing. <privacy>Privacy</privacy>",
+    "noticeNotKept": "Your text goes to Anthropic for the suggestions and, as you asked, is not added to your history. The free check runs in your browser and sends nothing. <privacy>Privacy</privacy>"
+  },
+  "Allowance": {
+    "visitor": "Up to {limit, plural, one {# free rewrite} other {# free rewrites}} a day with an email address.",
+    "member": "{left, plural, =0 {No attempts left today.} one {You have up to # of {limit} attempts left today.} other {You have up to # of {limit} attempts left today.}} Resets at {time}.",
+    "paused": "Rewriting is paused for now."
   },
   "LanguageSwitcher": {
     "label": "Language"
@@ -54,36 +95,112 @@
   "Review": {
     "title": "Suggested edits",
     "noEdits": "Nothing to change: this text already reads naturally.",
-    "summary": "{accepted} of {total} accepted",
+    "checkNoEdits": "Nothing on the list turned up. The list is short: stock phrases and paste clean-ups, nothing more.",
+    "checkMore": "{more, plural, one {One more edit is not shown.} other {# more edits are not shown.}} Accept the ones here, choose Edit this result, then run the check again.",
+    "sourceNotice": {
+      "sample": "A sample, with edits prepared in advance. Nothing was sent, no attempt was used and nothing goes to your history.",
+      "check": "Free check: a short list of stock phrases and paste clean-ups, run in your browser. Nothing was sent, no attempt was used and nothing goes to your history."
+    },
+    "checkReason": {
+      "opener": "A stock opening. The sentence stands without it.",
+      "closer": "A stock closing formula. The sentence stands without it.",
+      "wrapper": "Speaks to the reader about the text instead of being part of it.",
+      "filler": "Filler. Fewer words say the same thing.",
+      "inflated": "Often inflated wording. Check that the plainer words still say what you mean.",
+      "invisible": "An invisible character, often left by copying and pasting.",
+      "markup": "Formatting marks that show here as plain characters.",
+      "spaces": "An extra space.",
+      "frenchSpacing": "French typography puts a no-break space here."
+    },
+    "summary": "{accepted} accepted, {rejected} rejected, {pending} to decide",
+    "next": "Next to decide",
+    "keepsOriginal": "{count, plural, one {The edit still to decide keeps the original wording.} other {The # edits still to decide keep the original wording.}}",
     "accept": "Accept",
     "reject": "Reject",
     "undo": "Undo",
+    "undoLast": "Undo last decision",
     "acceptAll": "Accept all",
     "rejectAll": "Reject all",
+    "acceptRest": "Accept the rest",
+    "rejectRest": "Reject the rest",
+    "stateAccepted": "Accepted",
+    "stateRejected": "Rejected",
     "result": "Result",
     "copy": "Copy text",
+    "copyShort": "Copy",
     "copied": "Copied",
-    "backToEditor": "Edit the text",
-    "removed": "Before",
-    "added": "After",
+    "copyFailed": "Could not copy the text. It is selected, so you can copy it yourself.",
+    "editResult": "Edit this result",
+    "backToEditor": "Back to the original text",
+    "leaveSample": "Use your own text",
+    "removed": "Before:",
+    "added": "After:",
     "emptyReplacement": "(removed)",
     "inspiredBy": "Style references: {authors}",
-    "found": "{count, plural, =0 {Looking for edits...} one {# edit so far} other {# edits so far}}",
+    "found": "{count, plural, one {# edit so far} other {# edits so far}}",
     "stopped": "Stopped. Here is what was found so far.",
     "cutShort": "The answer was cut short. Here is what arrived.",
     "download": "Download .txt",
-    "shortcuts": "A accept, R reject, J and K move"
+    "shortcuts": "A accept, R reject, E reword, U undo, J and K move",
+    "reword": "Reword",
+    "reworded": "Your wording",
+    "rewordLabel": "Your wording",
+    "rewordSave": "Accept this wording",
+    "rewordCancel": "Cancel",
+    "rewordBlank": "Write something here, or cancel to keep the suggestion.",
+    "rewordKeys": "Ctrl+Enter accepts, Esc cancels",
+    "rewordCheck": "Check it before you accept. The choice is yours.",
+    "rewordWarning": {
+      "numbers_changed": "The numbers are not the same as in the original text.",
+      "units_changed": "A unit is not the same as in the original text.",
+      "figures_swapped": "A figure now goes with another name.",
+      "negation_changed": "A negation has changed from the original text.",
+      "bounds_changed": "A limit such as \"at least\" or \"at most\" has changed."
+    },
+    "length": {
+      "words": "{count, plural, one {# word} other {# words}}",
+      "characters": "{count, plural, one {# character} other {# characters}}",
+      "changed": "{count} ({difference})"
+    },
+    "list": {
+      "label": "The edits you accepted, before and after, with the reason for each.",
+      "title": "List of accepted edits: {count}",
+      "before": "Before:",
+      "after": "After:",
+      "why": "Why:",
+      "copy": "Copy the list",
+      "download": "Download the list",
+      "copyFailed": "Could not copy the list. You can download it instead."
+    },
+    "status": {
+      "waiting": "Rewriting your text.",
+      "writing": "{count, plural, one {# edit received.} other {# edits received.}}",
+      "ready": "{count, plural, =0 {Nothing left to decide.} one {# edit to review.} other {# edits to review.}}",
+      "none": "No edits to suggest.",
+      "stopped": "Rewriting stopped. {count, plural, =0 {Nothing left to decide.} one {# edit to review.} other {# edits to review.}}",
+      "cutShort": "The answer ended early. {count, plural, =0 {Nothing left to decide.} one {# edit to review.} other {# edits to review.}}",
+      "accepted": "Accepted. {left, plural, =0 {Nothing left to decide.} one {# edit left to decide.} other {# edits left to decide.}}",
+      "rejected": "Rejected. {left, plural, =0 {Nothing left to decide.} one {# edit left to decide.} other {# edits left to decide.}}",
+      "reworded": "Accepted with your wording. {left, plural, =0 {Nothing left to decide.} one {# edit left to decide.} other {# edits left to decide.}}",
+      "undone": "Decision undone. {left, plural, =0 {Nothing left to decide.} one {# edit left to decide.} other {# edits left to decide.}}",
+      "allAccepted": "{count, plural, one {# edit accepted.} other {# edits accepted.}} Nothing left to decide.",
+      "allRejected": "{count, plural, one {# edit rejected.} other {# edits rejected.}} Nothing left to decide.",
+      "copied": "Text copied.",
+      "listCopied": "List copied."
+    }
   },
   "Errors": {
-    "invalid_request": "This text can't be processed. Check its length and try again.",
+    "invalid_request": "Rewrity could not accept this request. Check that what you entered stays within the limits and contains no unusual characters, then try again.",
     "not_configured": "The rewrite service is not configured yet.",
     "refused": "The assistant declined to rewrite this text. Declined attempts count toward today's limit.",
     "busy": "The service is busy. Please try again in a moment. Failed attempts count toward today's limit.",
+    "provider_unavailable": "Rewriting is unavailable for the moment. Trying again now won't help, so please come back later. Failed attempts count toward today's limit.",
     "upstream_error": "The assistant could not answer. Please try again. Failed attempts count toward today's limit.",
+    "no_usable_edit": "No suggestion passed our checks, so your text stays as it is. This attempt counts toward today's limit.",
     "server_error": "Something went wrong on our side. Please try again.",
     "network": "Network error. Check your connection and try again.",
     "unauthorized": "Sign in to rewrite your text.",
-    "quota_exceeded": "You've reached today's limit. Come back tomorrow.",
+    "quota_exceeded": "You've reached today's limit. It resets at midnight UTC, which is 1 a.m. in Paris in winter and 2 a.m. in summer.",
     "global_quota_exceeded": "Rewrity has reached its overall usage limit for now. Try again later.",
     "too_many_requests": "A rewrite is already running. Wait for it to finish, then try again.",
     "page": "Something broke while showing this page.",
@@ -91,17 +208,25 @@
   },
   "Nav": {
     "home": "Rewrite",
-    "history": "History"
+    "history": "History",
+    "label": "Main menu",
+    "skip": "Skip to content"
   },
   "Auth": {
     "emailLabel": "Email",
     "emailPlaceholder": "you@example.com",
     "sendLink": "Email me a sign-in link",
     "sending": "Sending...",
-    "checkEmail": "Check your inbox: the sign-in link is on its way. Open it in this browser.",
+    "accountNote": "You need an account to rewrite a text. Asking for a link creates one if you don't have one yet. <privacy>Privacy</privacy>",
+    "checkEmail": "Check your inbox: the sign-in link is on its way to {email}. Open it in this browser.",
+    "useAnother": "Use another address",
     "signOut": "Sign out",
+    "signingOut": "Signing out...",
     "signedInAs": "Signed in as {email}",
+    "signOutFailed": "Could not sign out, so this browser is still signed in. Reload the page, then try again.",
     "sendFailed": "Could not send the link. Check the address, or try again in a few minutes.",
+    "sendNeedsReload": "Could not send the link. Reload the page, then try again.",
+    "sendOffline": "Could not send the link. Check your connection, then try again.",
     "callbackFailed": "This sign-in link did not work. It works once, soon after it is sent, and in the browser that asked for it. Request a new one here."
   },
   "History": {
@@ -114,6 +239,9 @@
     "loadFailed": "Could not load your history. Reload the page to try again.",
     "emptyHint": "Your rewrites will show up here once you run one.",
     "deleteFailed": "Could not delete this entry. Try again.",
+    "clearFailed": "Could not delete your history. Try again.",
+    "staleDelete": "This page is out of date, so nothing was deleted. Reload the page.",
+    "reopenFailed": "Could not reopen this rewrite. Your browser may be blocking this site's storage.",
     "reopen": "Reopen",
     "search": "Search your history",
     "noMatch": "Nothing matches \"{query}\".",
@@ -121,8 +249,31 @@
     "clearConfirm": "{count, plural, one {Delete this entry?} other {Delete all # entries?}} This cannot be undone.",
     "clearYes": "Yes, delete all",
     "clearNo": "Cancel",
+    "deleted": "Entry deleted.",
+    "cleared": "Your history was deleted.",
     "count": "{count, plural, one {# rewrite} other {# rewrites}}",
-    "olderHidden": "Only your {count} most recent rewrites are listed and searched."
+    "olderHidden": "Your {count} most recent rewrites are listed. Search covers these only: load more to reach older ones.",
+    "reopenRow": "Reopen the rewrite of {date}",
+    "deleteRow": "Delete the rewrite of {date}",
+    "deleteYes": "Yes, delete",
+    "matches": "{count, plural, =0 {No matches} one {# match} other {# matches}}",
+    "loadMore": "Load more",
+    "loadingMore": "Loading...",
+    "loadMoreFailed": "Could not load older rewrites. Try again."
+  },
+  "Account": {
+    "title": "Your account",
+    "download": "Download my history",
+    "downloading": "Preparing...",
+    "downloaded": "{count, plural, one {# rewrite saved} other {# rewrites saved}} in rewrity-history.json.",
+    "downloadFailed": "Could not download your whole history, so no file was saved. Try again.",
+    "delete": "Delete my account",
+    "deleteConfirm": "Delete your account and your whole history? This cannot be undone. What Anthropic has already received falls under its own terms.",
+    "deleteYes": "Yes, delete my account",
+    "deleteNo": "Cancel",
+    "deleting": "Deleting...",
+    "deleteFailed": "Could not confirm that your account was deleted. You can safely try again in a moment: if it is already gone, you will simply be signed out.",
+    "deleteStale": "This page is out of date: the account it was opened for is no longer the one signed in here. Nothing was deleted. Reload the page."
   },
   "Footer": {
     "privacy": "Privacy",
@@ -132,12 +283,12 @@
     "title": "Privacy",
     "intro": "What this site stores and who sees your text.",
     "dataTitle": "What we store",
-    "data": "Your email address; for each rewrite, the original text, the suggested edits, the language and the date; and the number of attempts you make each day. To apply the limits, a record of each attempt is also kept for at least two days, then removed when a later attempt, from any account, passes the limits. Your writing sample is not stored. History entries stay until you delete them from the history page, which lists your 50 most recent. Your email and daily counts stay until your account is deleted, which only the site's owner can do for now. Your browser keeps your session cookies and your language and appearance choices.",
+    "data": "Your email address; for each rewrite, the original text, the suggested edits, the language and the date; and the number of attempts you make each day. To apply the limits, a record of each attempt is also kept for at least two days, then removed when a later attempt, from any account, passes the limits. Your writing sample is not stored. History entries stay until you delete them from the history page, which lists your 50 most recent and loads older ones when you ask. You can also download your whole history from that page. If you tick \"Do not keep this text in my history\", that rewrite adds no entry: neither the text nor the suggested edits are stored, and the review exists only on the page. The attempt still counts, and the text still goes to Anthropic, as described below. Your email and daily counts stay until you delete your account, which you can do yourself from the history page; your history then goes with it, for good. The sign-in service keeps its own log, which names your address when your account is created, each time you ask for a sign-in link, sign in or sign out, each time your session is renewed automatically while you use the site, and when your account is deleted. That log is not removed with the account. Your browser keeps your session cookies and your language and appearance choices. When you ask for a sign-in link, it also keeps a copy of the text in the editor, of how much you chose to change and, if you ticked it, of your choice not to keep the text, so that you find them again after signing in. Your writing sample is left out. This copy stays in your browser and is removed as soon as the text is back in the editor, when you sign out, or, after an hour, the next time the editor opens.",
     "accessTitle": "Who can read it",
     "access": "Other users cannot read any of this. The site's owner can: your text is stored as written, not encrypted against them. The site runs on Vercel and the data is stored with Supabase, whose sign-in service can also record your IP address and browser.",
     "aiTitle": "AI processing",
-    "ai": "Your text is sent to Anthropic (Claude) to produce the suggestions, with your writing sample if you add one and up to three excerpts from the style corpus. Anthropic handles this data under its own terms. Do not submit text you are not allowed to share.",
-    "aiWithoutExcerpts": "Your text is sent to Anthropic (Claude) to produce the suggestions, with your writing sample if you add one. Anthropic handles this data under its own terms. Do not submit text you are not allowed to share.",
+    "ai": "Your text is sent to Anthropic (Claude) to produce the suggestions, with your writing sample if you add one and up to three excerpts from the style corpus. Anthropic handles this data under its own terms. Do not submit text you are not allowed to share. The free check runs in your browser and sends nothing.",
+    "aiWithoutExcerpts": "Your text is sent to Anthropic (Claude) to produce the suggestions, with your writing sample if you add one. Anthropic handles this data under its own terms. Do not submit text you are not allowed to share. The free check runs in your browser and sends nothing.",
     "limitsTitle": "Limits",
     "limits": "Suggestions are style edits. They do not change who wrote a text, and this tool does not detect AI-written text."
   },

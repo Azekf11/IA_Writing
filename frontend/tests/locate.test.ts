@@ -587,6 +587,94 @@ describe("locateEdits", () => {
       ).toBe("This is **truly** for us.");
     });
 
+    describe("a word that fills its emphasis", () => {
+      it.each([
+        [
+          "bold",
+          "Il a **vraiment** r\u00e9ussi.",
+          "vraiment",
+          "Il a r\u00e9ussi.",
+        ],
+        [
+          "italics",
+          "Il a *vraiment* r\u00e9ussi.",
+          "vraiment",
+          "Il a r\u00e9ussi.",
+        ],
+        ["both", "He ***truly*** won.", "truly", "He won."],
+        ["several words", "He **did truly** win.", "did truly", "He win."],
+        ["the opening", "**Truly** we won.", "Truly", "we won."],
+        ["the closing", "We won **truly**", "truly", "We won"],
+        ["before a stop", "We won **truly**.", "truly", "We won."],
+        [
+          "before French punctuation",
+          "On a gagn\u00e9 **vraiment**\u00a0: oui.",
+          "vraiment",
+          "On a gagn\u00e9\u00a0: oui.",
+        ],
+        ["its own line", "**Title**\n\nText.", "Title", "Text."],
+        ["inner asterisks of a longer run", "A ****b**** c", "**b**", "A c"],
+        ["the first of two", "**a** **b**", "a", "**b**"],
+        ["the second of two", "**a** **b**", "b", "**a**"],
+        ["bold next to italics", "**a***b*", "a", "*b*"],
+        ["a word inside a longer bold", "**a *b* c**", "b", "**a c**"],
+      ])("takes the markers along: %s", (_case, text, quote, result) => {
+        expect(accepted(text, edit(quote, ""))).toBe(result);
+      });
+
+      it("treats spaces in place of the word as a deletion", () => {
+        expect(accepted("He **truly** won.", edit("truly", " "))).toBe(
+          "He won.",
+        );
+      });
+
+      it("reports the markers as part of what goes, so the page can show them", () => {
+        const [result] = locateEdits("He **truly** won.", [edit("truly", "")]);
+        expect(result.original).toBe("**truly** ");
+      });
+
+      it.each([
+        ["no closing marker", "Il a **vraiment r\u00e9ussi.", "vraiment"],
+        ["no opening marker", "Il a vraiment** r\u00e9ussi.", "vraiment"],
+        [
+          "markers away from the word",
+          "Il a ** vraiment ** r\u00e9ussi.",
+          "vraiment",
+        ],
+      ])("leaves the asterisks alone: %s", (_case, text, quote) => {
+        expect(accepted(text, edit(quote, ""))?.match(/\*/g)?.length).toBe(
+          text.match(/\*/g)?.length,
+        );
+      });
+
+      it("does not count a quote of spaces as a word", () => {
+        expect(accepted("** **", edit(" ", ""))).toBe("****");
+      });
+
+      it("does not join what the markers keep apart", () => {
+        expect(accepted("a*b*c", edit("b", ""))).toBe("a**c");
+      });
+
+      it("keeps the markers another edit holds", () => {
+        const text = "He **truly** won it.";
+        const edits = locateEdits(text, [
+          edit("** won", "** took"),
+          edit("truly", ""),
+        ]);
+        expect(applyEdits(text, edits, decide(edits))).toBe("He **** took it.");
+        expect(edits.map((e) => text.slice(e.start, e.end))).toEqual([
+          "truly",
+          "** won",
+        ]);
+      });
+
+      it("changes nothing when the quote already holds the markers", () => {
+        expect(
+          accepted("Il a **vraiment** r\u00e9ussi.", edit("**vraiment**", "")),
+        ).toBe("Il a r\u00e9ussi.");
+      });
+    });
+
     it("leaves a spaced dash as it was", () => {
       expect(accepted("It works \u2014 truly well.", edit("truly ", ""))).toBe(
         "It works \u2014 well.",
@@ -1169,12 +1257,12 @@ describe("locateEdits", () => {
         "From 5-10 people \u2014 maybe.",
       ],
       ["On 12/03, and/or later.", "/", " ", "On 12/03, and or later."],
-      ["Cost 1'200 it's said.", "'", "\u2019", "Cost 1'200 it\u2019s said."],
+      ["Cost 1'200 it's said.", "'", "-", "Cost 1'200 it-s said."],
       [
         "Cost 1\u2019200 it\u2019s said.",
         "\u2019",
-        "'",
-        "Cost 1\u2019200 it's said.",
+        "-",
+        "Cost 1\u2019200 it-s said.",
       ],
       [
         "Up 12% in the % column.",
@@ -1326,6 +1414,238 @@ describe("locateEdits", () => {
       expect(
         accepted("\u26A0\uFE0FAttention au départ.", edit("\u26A0\uFE0F", "")),
       ).toBe("Attention au départ.");
+    });
+  });
+
+  describe("a replacement in the typography of its text", () => {
+    const written = (text: string, quote: string, by: string) =>
+      locateEdits(text, [edit(quote, by)])[0]?.replacement;
+
+    describe("apostrophes", () => {
+      it.each([
+        [
+          "French, curly",
+          "L\u2019entrepreneur l\u2019a dit.",
+          "L\u2019entrepreneur",
+          "L'ami",
+          "L\u2019ami",
+        ],
+        [
+          "English, curly",
+          "It\u2019s a plan we\u2019d keep.",
+          "a plan",
+          "the firm's plan",
+          "the firm\u2019s plan",
+        ],
+        [
+          "a quote retyped straight",
+          "L\u2019entrepreneur l\u2019a dit.",
+          "L'entrepreneur",
+          "L'ami",
+          "L\u2019ami",
+        ],
+        [
+          "French, straight",
+          "L'entrepreneur l'a dit.",
+          "L'entrepreneur",
+          "L\u2019ami",
+          "L'ami",
+        ],
+        [
+          "English, straight",
+          "It's a plan we'd keep.",
+          "a plan",
+          "the firm\u2019s plan",
+          "the firm's plan",
+        ],
+      ])("follows the text: %s", (_case, text, quote, by, result) => {
+        expect(written(text, quote, by)).toBe(result);
+      });
+
+      it("reads the letter next to the replacement, in the text", () => {
+        expect(
+          accepted("Un ami de Anne l\u2019a dit.", edit("de ", "d'")),
+        ).toBe("Un ami d\u2019Anne l\u2019a dit.");
+        expect(accepted("L ami l\u2019a dit.", edit(" ami", "'ami"))).toBe(
+          "L\u2019ami l\u2019a dit.",
+        );
+      });
+
+      it("leaves a digit group alone", () => {
+        expect(
+          written(
+            "L\u2019ami paie 1\u2019200 francs.",
+            "L\u2019ami paie 1\u2019200",
+            "L'ami verse 1'200",
+          ),
+        ).toBe("L\u2019ami verse 1'200");
+      });
+
+      it("leaves a quotation mark alone", () => {
+        expect(written("L\u2019ami dit ceci.", "ceci", "'cela'")).toBe(
+          "'cela'",
+        );
+      });
+
+      it.each([
+        ["both kinds", "L'ami l\u2019a dit.", "dit", "l'a vu l\u2019ami"],
+        ["none", "Le chef parle.", "parle", "l'a dit l\u2019ami"],
+      ])(
+        "keeps what the model wrote when the text has %s",
+        (_case, text, quote, by) => {
+          expect(written(text, quote, by)).toBe(by);
+        },
+      );
+    });
+
+    describe("double quotes", () => {
+      it.each([
+        [
+          "French, curly",
+          "Il a dit \u201csalut\u201d hier.",
+          "hier",
+          'avec un "merci"',
+          "avec un \u201cmerci\u201d",
+        ],
+        [
+          "English, curly",
+          "She said \u201chello\u201d twice.",
+          "twice",
+          '"goodbye" and "thanks"',
+          "\u201cgoodbye\u201d and \u201cthanks\u201d",
+        ],
+        [
+          "French, straight",
+          'Il a dit "salut" hier.',
+          "hier",
+          "avec un \u201cmerci\u201d",
+          'avec un "merci"',
+        ],
+        [
+          "English, straight",
+          'She said "hello" twice.',
+          "twice",
+          "\u201cgoodbye\u201d and \u201cthanks\u201d",
+          '"goodbye" and "thanks"',
+        ],
+      ])("follows the text: %s", (_case, text, quote, by, result) => {
+        expect(written(text, quote, by)).toBe(result);
+      });
+
+      it.each([
+        [
+          "inches",
+          "A \u201cfine\u201d set of 5 and 6 screens.",
+          "set of 5 and 6 screens",
+          'set of 5" and 6" screens',
+        ],
+        ["a lone mark", "A \u201cfine\u201d set.", "set", 'set"'],
+        [
+          "marks set apart by spaces",
+          "Un \u201cbon\u201d mot.",
+          "mot",
+          'mot " juste "',
+        ],
+        ["no style: both", '"Un" \u201cbon\u201d mot.', "mot", 'mot "juste"'],
+        [
+          "no style: guillemets as well",
+          "\u00ab Un \u00bb \u201cbon\u201d mot.",
+          "mot",
+          'mot "juste"',
+        ],
+        [
+          "no style: guillemets only",
+          "Il dit \u00ab salut \u00bb ici.",
+          "ici",
+          '"merci"',
+        ],
+        [
+          "no style: guillemets only, with curly marks",
+          "Il dit \u00ab salut \u00bb ici.",
+          "ici",
+          "\u201cmerci\u201d",
+        ],
+        ["no style: none", "Un bon mot.", "mot", 'mot "juste"'],
+        [
+          "curly marks that do not pair up",
+          "\u201cUn bon mot.",
+          "mot",
+          '"juste"',
+        ],
+        [
+          "straight marks that do not pair up",
+          'Un 15" ici.',
+          "ici",
+          "\u201cla\u201d",
+        ],
+        [
+          "a replacement whose curly marks do not pair up",
+          'Il dit "oui" ici.',
+          "ici",
+          "\u201cla",
+        ],
+      ])("keeps what the model wrote: %s", (_case, text, quote, by) => {
+        expect(written(text, quote, by)).toBe(by);
+      });
+    });
+
+    describe("no-break spaces in French", () => {
+      it.each([":", ";", "!", "?"])("before %s", (mark) => {
+        expect(
+          written(`Oui\u00a0${mark} non.`, "non", `ceci ${mark} cela`),
+        ).toBe(`ceci\u00a0${mark} cela`);
+      });
+
+      it("inside guillemets", () => {
+        expect(
+          written(
+            "Il dit \u00ab\u00a0oui\u00a0\u00bb ici.",
+            "ici",
+            "\u00ab non \u00bb encore",
+          ),
+        ).toBe("\u00ab\u00a0non\u00a0\u00bb encore");
+      });
+
+      it("restores the one a retyped quote lost", () => {
+        expect(written("Tarif\u00a0: 5 €.", "Tarif : 5 €", "Prix : 5 €")).toBe(
+          "Prix\u00a0: 5 €",
+        );
+      });
+
+      it("keeps each mark's own kind of space", () => {
+        expect(written("Oui\u202f; non\u00a0: si.", "si", "a ; b : c")).toBe(
+          "a\u202f; b\u00a0: c",
+        );
+      });
+
+      it("reads the mark that follows the replacement, in the text", () => {
+        expect(accepted("Tarif\u00a0: 5.", edit("Tarif\u00a0", "Prix "))).toBe(
+          "Prix\u00a0: 5.",
+        );
+      });
+
+      it.each([
+        [
+          "plain spaces and no-break ones",
+          "Oui : non\u00a0: si.",
+          "si",
+          "a : b",
+        ],
+        ["two kinds", "Oui\u00a0: non\u202f: si.", "si", "a : b"],
+        ["plain spaces", "Oui : non.", "non", "a : b"],
+        ["another mark", "Oui\u00a0: non.", "non", "a ! b"],
+        ["English", "Yes: no.", "no", "a : b"],
+      ])("keeps what the model wrote: %s", (_case, text, quote, by) => {
+        expect(written(text, quote, by)).toBe(by);
+      });
+    });
+
+    it("keeps the offsets of the text and the guarded figures", () => {
+      const text = "L\u2019ami a payé 5\u00a0€.";
+      const [result] = locateEdits(text, [edit("L'ami", "L'homme")]);
+      expect([result.start, result.end]).toEqual([0, 5]);
+      expect(result.original).toBe("L\u2019ami");
+      expect(locateEdits(text, [edit("L'ami a", "L'ami 6 a")])).toEqual([]);
     });
   });
 

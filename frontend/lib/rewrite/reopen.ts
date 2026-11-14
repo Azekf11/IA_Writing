@@ -24,12 +24,14 @@ const isEdit = (value: unknown): value is Edit => {
   );
 };
 
-export function stashReopen(text: string, edits: Edit[]): void {
+// False when storage is blocked or full: the rewrite cannot reach the editor, so the caller stays put
+export function stashReopen(text: string, edits: Edit[]): boolean {
   try {
     const value: Stashed = { text, edits, stamp: Date.now() };
     sessionStorage.setItem(KEY, JSON.stringify(value));
+    return true;
   } catch {
-    // Storage can be blocked: the editor then opens on the reader's draft, or empty
+    return false;
   }
 }
 

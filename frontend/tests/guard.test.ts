@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { guardEdits, MAX_EDITS, whyDrop } from "@/lib/rewrite/guard";
+import {
+  factChange,
+  guardEdits,
+  MAX_EDITS,
+  whyDrop,
+} from "@/lib/rewrite/guard";
 
 const edit = (original: string, replacement: string) => ({
   original,
@@ -13,7 +18,7 @@ describe("whyDrop", () => {
   });
 
   it("drops an edit that changes nothing, even in case, spacing or typography", () => {
-    expect(whyDrop(edit("Hello  World", "hello world"))).toBe("unchanged");
+    expect(whyDrop(edit("Hello  world", "hello world"))).toBe("unchanged");
     expect(whyDrop(edit("L'homme est là", "L\u2019homme est là"))).toBe(
       "unchanged",
     );
@@ -66,6 +71,70 @@ describe("whyDrop", () => {
     expect(
       whyDrop(edit("In 2019 we sold 40 units", "We sold 40 units in 2019")),
     ).toBeNull();
+  });
+});
+
+describe("whyDrop: title case taken off", () => {
+  it.each([
+    ["5 Ways AI Is Changing Work", "5 ways AI is changing work"],
+    ["Top 10 Tips For Writers", "Top 10 tips for writers"],
+    ["Hello  World", "hello world"],
+    ["Real-Time Data Insights", "Real-time data insights"],
+    ["Ways To Save Hours Every Day", "Ways to save hours every day"],
+    [
+      "5 Fa\u00e7ons De Travailler Autrement",
+      "5 fa\u00e7ons de travailler autrement",
+    ],
+    ["Les D\u00e9fis Du Monde Moderne", "Les d\u00e9fis du monde moderne"],
+    ["L'Homme Est Un Loup", "L'homme est un loup"],
+    ["L\u2019\u00c9quipe Et Ses Clients", "L'\u00e9quipe et ses clients"],
+  ])("%s can become %s", (original, replacement) => {
+    expect(whyDrop(edit(original, replacement))).toBeNull();
+  });
+
+  it.each([
+    ["one word", "the Internet", "the internet"],
+    ["one word, in French", "la R\u00e9publique", "la r\u00e9publique"],
+    ["one word and its article", "L'Homme", "l'homme"],
+    ["one hyphenated word", "Jean-Pierre", "jean-pierre"],
+    ["capitals added", "5 ways to win", "5 Ways To Win"],
+    [
+      "capitals added, in French",
+      "les d\u00e9fis du monde",
+      "Les D\u00e9fis Du Monde",
+    ],
+    ["a capital in the middle", "AI Tools Win", "ai tools win"],
+    ["a capital added to a name", "iPhone Sales Grow", "Iphone sales grow"],
+    ["a unit", "5 Mg", "5 mg"],
+    ["a unit next to a figure", "5 Mg Of Salt Daily", "5 mg of salt daily"],
+    ["a unit stuck to its figure", "5Mg Of Salt Daily", "5mg of salt daily"],
+    ["a unit after a hyphen", "5-Mg Doses Are Safe", "5-mg doses are safe"],
+    ["a unit ahead of its figure", "Mg 5 Of Salt Daily", "mg 5 of salt daily"],
+    ["a unit in French", "Prendre 5 Mg Par Jour", "Prendre 5 mg par jour"],
+    [
+      "data in French",
+      "5 Mo De Donn\u00e9es Perdues",
+      "5 mo de donn\u00e9es perdues",
+    ],
+    ["a word that is a unit in French", "5 To Go Now", "5 to go now"],
+    [
+      "one letter next to a figure",
+      "5 M Users Came Back",
+      "5 m users came back",
+    ],
+    [
+      "a unit that costs a suggestion",
+      "5 Hours A Day Now",
+      "5 hours a day now",
+    ],
+  ])("stays unchanged: %s", (_case, original, replacement) => {
+    expect(whyDrop(edit(original, replacement))).toBe("unchanged");
+  });
+
+  it("still holds such an edit to the other checks", () => {
+    expect(
+      whyDrop(edit("<b>Five Ways To Win</b>", "<b>five ways to win</b>")),
+    ).toBe("markup");
   });
 });
 
@@ -1552,6 +1621,20 @@ describe("whyDrop: what it cannot see", () => {
     );
   });
 
+  it("misses a bound that a word only approximates, or that stands after its figure", () => {
+    kept("About 40% agreed.", "Over 40% agreed.");
+    kept("Environ 40 % sont d'accord.", "Plus de 40 % sont d'accord.");
+    kept("40 people or more", "40 people or fewer");
+    kept("40 personnes au moins", "40 personnes au plus");
+  });
+
+  it("misses two bounds on one figure that trade places", () => {
+    kept(
+      "More than 40 men and fewer than 40 women",
+      "Fewer than 40 men and more than 40 women",
+    );
+  });
+
   it("misses a clause denied by a word it does not list", () => {
     kept(
       "It is not alleged that the firm paid 40 staff, but it is possible.",
@@ -1867,5 +1950,47 @@ describe("guardEdits", () => {
     const { kept, dropped } = guardEdits(many);
     expect(kept).toHaveLength(MAX_EDITS);
     expect(dropped.too_many).toBe(5);
+  });
+});
+
+describe("factChange", () => {
+  it("has nothing to say about an ordinary rewording", () => {
+    expect(factChange("It is crucial to act", "We must act")).toBeNull();
+  });
+
+  it.each([
+    ["numbers_changed", "It costs 10 euros.", "It costs 12 euros."],
+    ["units_changed", "It takes 10 minutes.", "It takes 10 hours."],
+    [
+      "figures_swapped",
+      "Paris has 10 stations and Lyon has 4.",
+      "Paris has 4 stations and Lyon has 10.",
+    ],
+    ["negation_changed", "It is not ready.", "It is ready."],
+    ["bounds_changed", "At least 10 people came.", "At most 10 people came."],
+  ])("reports %s", (reason, original, wording) => {
+    expect(factChange(original, wording)).toBe(reason);
+  });
+
+  it("reads French as well", () => {
+    expect(factChange("Il n'est pas prêt.", "Il est prêt.")).toBe(
+      "negation_changed",
+    );
+    expect(factChange("Cela coûte 12,5 %.", "Cela coûte 15 %.")).toBe(
+      "numbers_changed",
+    );
+  });
+
+  // The reasons that have nothing to do with the facts are for the model's edits only
+  it("still looks at a wording the model would not be allowed", () => {
+    const longer = `Costs 12 euros ${"and goes on ".repeat(30)}`;
+    expect(whyDrop(edit("Costs 10 euros", longer))).toBe("too_long");
+    expect(factChange("Costs 10 euros", longer)).toBe("numbers_changed");
+  });
+
+  it("gives whyDrop its answer on a model's edit", () => {
+    expect(whyDrop(edit("It costs 10 euros", "It costs 12 euros"))).toBe(
+      factChange("It costs 10 euros", "It costs 12 euros"),
+    );
   });
 });

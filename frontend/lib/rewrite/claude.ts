@@ -1,7 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import type { Reference } from "@/lib/style/retrieve";
-import { noteAnswer, type AttemptReport } from "./diagnostics";
+import { noteAnswer, noteFailure, type AttemptReport } from "./diagnostics";
 import { EditStreamParser } from "./edit-stream";
 import { buildUserMessage, SYSTEM_PROMPT, type MessageOptions } from "./prompt";
 import { ClaudeOutputSchema, type RawEdit } from "./schema";
@@ -15,7 +15,7 @@ const MAX_TOKENS = 8000;
 
 // How long a request may spend up to the end of the model call, out of the route's 60 s limit:
 // the rest is there to save the result and close the ticket.
-const CALL_MS = 50_000;
+export const CALL_MS = 50_000;
 
 // `elapsedMs` is what the request has already used
 const deadlineAfter = (elapsedMs: number) =>
@@ -48,6 +48,11 @@ function getClient(): Anthropic {
   return cached;
 }
 
+// The API turning the account or the setup down: no credit or a spend limit reached (400, 402), a key
+// it rejects (401, 403), a model it does not know (404). The request's shape is fixed and its text
+// bounded, so sending it again would get the same answer.
+const TURNED_DOWN = new Set<number | undefined>([400, 401, 402, 403, 404]);
+
 // Turn SDK failures into codes the UI can translate. Everything here happens after the model was
 // called, so no code here says the attempt is free: server_error is for what comes before the
 // call. Logs carry a status or a class name, never an error message: one can quote the model's
@@ -74,17 +79,19 @@ function toRewriteError(error: unknown): RewriteError {
   ) {
     return new RewriteError("busy", 503);
   }
-  if (
-    error instanceof Anthropic.AuthenticationError ||
-    error instanceof Anthropic.PermissionDeniedError
-  ) {
-    // A bad key is our problem, not the user's
-    console.error("Anthropic credentials rejected");
-    return new RewriteError("upstream_error", 502);
-  }
   if (error instanceof Anthropic.APIError) {
-    console.error("Anthropic API error", error.status);
-    return new RewriteError("upstream_error", 502);
+    if (
+      error instanceof Anthropic.AuthenticationError ||
+      error instanceof Anthropic.PermissionDeniedError
+    ) {
+      // A bad key is our problem, not the user's
+      console.error("Anthropic credentials rejected");
+    } else {
+      console.error("Anthropic API error", error.status);
+    }
+    return TURNED_DOWN.has(error.status)
+      ? new RewriteError("provider_unavailable", 503)
+      : new RewriteError("upstream_error", 502);
   }
   // Includes the plain AnthropicError the SDK raises when a stream dies partway
   console.error(
@@ -92,6 +99,24 @@ function toRewriteError(error: unknown): RewriteError {
     error instanceof Error ? error.name : typeof error,
   );
   return new RewriteError("upstream_error", 502);
+}
+
+// What the reader hears of a failed call, kept for the attempt's log line too. A reader who left
+// hears nothing, and the state on that line already says so.
+function reportFailure(
+  error: unknown,
+  report: AttemptReport,
+  reader?: AbortSignal,
+): RewriteError {
+  const failure = toRewriteError(error);
+  if (!reader?.aborted) {
+    noteFailure(
+      report,
+      failure.code,
+      error instanceof Anthropic.APIError ? error : undefined,
+    );
+  }
+  return failure;
 }
 
 // The JSON schema the answer must follow. Only the schema: with the helper's parse step, the SDK
@@ -156,7 +181,7 @@ export async function requestEdits(
     return edits;
   } catch (error) {
     if (deadline.aborted) console.error("Model call reached its deadline");
-    throw toRewriteError(error);
+    throw reportFailure(error, report);
   } finally {
     report.modelMs = performance.now() - started;
   }
@@ -214,7 +239,7 @@ export async function streamEdits(
     // The tokens the service had reported when the stream broke or was cancelled
     noteAnswer(report, soFar);
     if (deadline.aborted) console.error("Model call reached its deadline");
-    throw toRewriteError(error);
+    throw reportFailure(error, report, signal);
   } finally {
     report.modelMs = performance.now() - started;
   }

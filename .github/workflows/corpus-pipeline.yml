@@ -3,9 +3,21 @@ name: Corpus pipeline
 on:
   push:
     branches: [main]
-    paths: ["corpus-pipeline/**", ".github/workflows/corpus-pipeline.yml"]
+    # The embedder and the fixture live with the app, and a test here checks them against each other
+    paths:
+      - "corpus-pipeline/**"
+      - "frontend/data/embedder/**"
+      - "frontend/tests/fixtures/embedder-parity.json"
+      - ".github/workflows/corpus-pipeline.yml"
   pull_request:
-    paths: ["corpus-pipeline/**", ".github/workflows/corpus-pipeline.yml"]
+    paths:
+      - "corpus-pipeline/**"
+      - "frontend/data/embedder/**"
+      - "frontend/tests/fixtures/embedder-parity.json"
+      - ".github/workflows/corpus-pipeline.yml"
+
+permissions:
+  contents: read
 
 jobs:
   check:

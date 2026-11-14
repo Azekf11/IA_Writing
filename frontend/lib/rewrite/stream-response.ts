@@ -1,6 +1,6 @@
 import { RewriteError, streamEdits } from "./claude";
 import { EditCollector } from "./collect";
-import type { AttemptReport } from "./diagnostics";
+import { noteFailure, type AttemptReport } from "./diagnostics";
 import type { MessageOptions } from "./prompt";
 import { encodeEvent, STREAM_TYPE, type StreamEvent } from "./protocol";
 import type { Outcome } from "./quota";
@@ -135,7 +135,8 @@ export function streamResponse(job: Job): {
           Object.keys(collector.dropped).some((why) => why !== "unchanged")
         ) {
           console.info("Edits dropped", collector.dropped);
-          throw new RewriteError("upstream_error", 502);
+          if (job.report) noteFailure(job.report, "no_usable_edit");
+          throw new RewriteError("no_usable_edit", 502);
         } else {
           done();
           outcome = "succeeded";
