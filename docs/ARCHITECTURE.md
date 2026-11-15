@@ -1167,7 +1167,10 @@ GitHub Actions has one workflow per area (`frontend.yml`, `database.yml`, `corpu
 and none needs a secret. The Frontend workflow also starts on `supabase/migrations/**`, because a unit test reads the
 migrations, and on `corpus-pipeline/uv.lock`, which the test of the dependency updates looks for. It runs the unit
 tests with `TZ=Asia/Tokyo`: the runner's own zone is UTC, where code that took the local day or a local midnight for
-the UTC one would pass. `ci-config.test.ts` requires that setting too. The audit's
+the UTC one would pass. `ci-config.test.ts` requires that setting too. The database tests and the audit choose the
+UTC day of the counts they set and read by their own clock, and the database counts by its clock, so no database test
+file and no audit check runs across midnight UTC: a file waits for it when it would start less than five minutes
+before, a check less than two (`supabase/tests/utc-day.mjs`). The audit's
 `limits` and `concurrency` suites run in CI on changes to `supabase/**`, `frontend/app/**`, `frontend/components/**`,
 `frontend/lib/**`, `frontend/i18n/**`, `frontend/messages/**`, `frontend/proxy.ts`, `frontend/next.config.ts`,
 `frontend/audit/**`, `frontend/package.json`, `frontend/package-lock.json` or `.github/workflows/integration.yml`, with

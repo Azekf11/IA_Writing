@@ -7,6 +7,12 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
 export { localStack } from "./local-stack.mjs";
+export { clearOfMidnight } from "./utc-day.mjs";
+
+// A test file runs whole on one UTC day: its tests compare the counts of the day these helpers read
+// with those the database keeps by its own clock, and saveScene puts a day's count back at the end.
+// Five minutes is far more than a file takes.
+export const FILE_MARGIN_MS = 5 * 60 * 1000;
 
 const ROOT = fileURLToPath(new URL("../../", import.meta.url));
 
@@ -189,13 +195,15 @@ export async function age(api, id, seconds) {
   );
 }
 
-// Saves the limits and today's global count, so a test run leaves the local stack as it was
+// Saves the limits and the day's global count, so a test run leaves the local stack as it was. The
+// count goes back on the day it was read on.
 export async function saveScene(api) {
   const { id: _id, ...limits } = await getLimits(api);
-  const global = await globalToday(api);
+  const day = today();
+  const global = await globalOn(api, day);
   return async () => {
     await setLimits(api, limits);
-    await setGlobalToday(api, global);
+    await setGlobalOn(api, day, global);
   };
 }
 

@@ -16,13 +16,12 @@ import { chromium } from "@playwright/test";
 import { startMockAnthropic } from "./mock-anthropic.mjs";
 import {
   getLimits,
-  globalToday,
   issues,
   localEnv,
   removePassages,
   results,
+  saveGlobalCount,
   seedPassages,
-  setGlobalToday,
   setLimits,
   siteCommands,
   sleep,
@@ -96,10 +95,10 @@ async function main() {
         "the local database has no quota_limits table: apply the migrations (supabase migration up)",
       );
     });
-    const startedAt = await globalToday(env);
+    const putBackGlobalCount = await saveGlobalCount(env);
     undo.push(async () => {
       await setLimits(env, limits);
-      await setGlobalToday(env, startedAt);
+      await putBackGlobalCount();
     });
     await setLimits(env, AUDIT_LIMITS);
 

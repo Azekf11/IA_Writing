@@ -4,10 +4,17 @@ import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
 import path from "node:path";
 import Anthropic from "@anthropic-ai/sdk";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { requestEdits } from "@/lib/rewrite/claude";
 import type { AttemptReport } from "@/lib/rewrite/diagnostics";
-import { localEnv, siteCommands, siteEnv } from "../audit/lib.mjs";
+import {
+  check,
+  getUsage,
+  localEnv,
+  saveGlobalCount,
+  siteCommands,
+  siteEnv,
+} from "../audit/lib.mjs";
 import { startMockAnthropic } from "../audit/mock-anthropic.mjs";
 
 const execFileSync = vi.hoisted(() => vi.fn());
@@ -181,5 +188,98 @@ describe("the stand-in for the model", () => {
     } finally {
       await mock.close();
     }
+  });
+});
+
+// The audit's helpers read the day by this clock, the database and the route count by theirs: a
+// check that started at 23:59:59 UTC took its ceiling from one day and was counted on the next
+describe("a check", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.spyOn(console, "log").mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.mocked(console.log).mockRestore();
+  });
+
+  const startOf = (at: string) => {
+    vi.setSystemTime(new Date(at));
+    let started = "";
+    const done = check("clock", "one day", async () => {
+      started = new Date().toISOString();
+    });
+    return { done, started: () => started };
+  };
+
+  it("waits for midnight UTC when less than two minutes of the day are left", async () => {
+    const run = startOf("2026-11-14T23:58:00.001Z");
+    await vi.advanceTimersByTimeAsync(124_998);
+    expect(run.started()).toBe("");
+    await vi.advanceTimersByTimeAsync(1);
+    await run.done;
+    expect(run.started()).toBe("2026-11-15T00:00:05.000Z");
+  });
+
+  it("starts at once with more of the day left", async () => {
+    const run = startOf("2026-11-14T23:57:59.999Z");
+    await run.done;
+    expect(run.started()).toBe("2026-11-14T23:57:59.999Z");
+  });
+});
+
+describe("the counts the audit reads and puts back", () => {
+  const env = {
+    API_URL: "http://127.0.0.1:54321",
+    PUBLISHABLE_KEY: "publishable",
+    SECRET_KEY: "secret",
+  };
+  let calls: [string, string, unknown][] = [];
+  const answering = (rows: unknown) =>
+    vi.fn(async (url: string, init: RequestInit) => {
+      const method = init.method ?? "GET";
+      const body = init.body ? JSON.parse(String(init.body)) : undefined;
+      calls.push([method, url.replace(env.API_URL, ""), body]);
+      return new Response(method === "GET" ? JSON.stringify(rows) : "");
+    });
+
+  beforeEach(() => {
+    calls = [];
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+  });
+
+  it("counts an account's attempts on every day it has", async () => {
+    vi.stubGlobal("fetch", answering([{ count: 4 }, { count: 1 }]));
+    expect(await getUsage(env, { id: "u1" })).toBe(5);
+    expect(calls).toEqual([
+      ["GET", "/rest/v1/usage?user_id=eq.u1&select=count", undefined],
+    ]);
+  });
+
+  it("puts the global count back on the day the run started, without the days after it", async () => {
+    vi.stubGlobal("fetch", answering([{ count: 7 }]));
+    vi.setSystemTime(new Date("2026-11-14T23:59:00.000Z"));
+    const putBack = await saveGlobalCount(env);
+    vi.setSystemTime(new Date("2026-11-15T00:03:00.000Z"));
+    await putBack();
+    expect(calls).toEqual([
+      [
+        "GET",
+        "/rest/v1/usage_global?day=eq.2026-11-14&select=count",
+        undefined,
+      ],
+      ["DELETE", "/rest/v1/usage_global?day=gt.2026-11-14", undefined],
+      [
+        "POST",
+        "/rest/v1/usage_global?on_conflict=day",
+        { day: "2026-11-14", count: 7 },
+      ],
+    ]);
   });
 });

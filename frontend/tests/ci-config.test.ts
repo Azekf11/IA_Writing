@@ -23,6 +23,7 @@ describe("what starts each workflow", () => {
     ["frontend", ".github/**"],
     ["frontend", "docs/research/comparison-texts.json"],
     ["frontend", "supabase/tests/local-stack.mjs"],
+    ["frontend", "supabase/tests/utc-day.mjs"],
     ["frontend", "supabase/migrations/**"],
     // The dependency updates below look for it
     ["frontend", "corpus-pipeline/uv.lock"],

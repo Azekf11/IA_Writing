@@ -9,6 +9,7 @@ on:
       - ".github/**"
       - "docs/research/comparison-texts.json"
       - "supabase/tests/local-stack.mjs"
+      - "supabase/tests/utc-day.mjs"
       - "supabase/migrations/**"
       - "corpus-pipeline/uv.lock"
   pull_request:
@@ -17,6 +18,7 @@ on:
       - ".github/**"
       - "docs/research/comparison-texts.json"
       - "supabase/tests/local-stack.mjs"
+      - "supabase/tests/utc-day.mjs"
       - "supabase/migrations/**"
       - "corpus-pipeline/uv.lock"
 

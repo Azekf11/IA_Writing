@@ -12,9 +12,11 @@ import {
 } from "../../frontend/lib/rewrite/quota.ts";
 import {
   age,
+  clearOfMidnight,
   client,
   createUser,
   deleteUser,
+  FILE_MARGIN_MS,
   getLimits,
   globalOn,
   globalThisMonth,
@@ -107,6 +109,9 @@ const tally = (responses) => {
   }
   return out;
 };
+
+// First, so that the scene below is saved on the day the whole file runs on
+before(() => clearOfMidnight(FILE_MARGIN_MS));
 
 before(async () => {
   shipped = await getLimits(api);

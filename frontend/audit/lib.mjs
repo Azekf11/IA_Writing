@@ -1,6 +1,7 @@
 // Shared pieces of the site audit: result collection, local Supabase helpers, mailbox access.
 import { createServerClient } from "@supabase/ssr";
 import { BASE_KEYS, localStack } from "../../supabase/tests/local-stack.mjs";
+import { clearOfMidnight } from "../../supabase/tests/utc-day.mjs";
 
 export class Warn extends Error {}
 export const warn = (detail) => {
@@ -11,8 +12,14 @@ export const results = [];
 // Problems seen while pages were open: console errors, failed requests, thrown exceptions
 export const issues = [];
 
+// No check starts in the last two minutes of a UTC day: the helpers below read the day by this
+// clock, and the database and the route count by theirs. The longest check takes under 20 s.
+const CHECK_MARGIN_MS = 2 * 60 * 1000;
+
 // Runs one check. Returning a string is a pass with a note; throwing fails; `warn()` warns.
 export async function check(area, name, fn) {
+  // Before the timing starts, so that a wait is no part of the check's time
+  await clearOfMidnight(CHECK_MARGIN_MS);
   const started = performance.now();
   let status = "pass";
   let detail = "";
@@ -180,12 +187,15 @@ export const setUsage = (env, user, count) =>
     body: { user_id: user.id, day: today(), count },
   });
 
+// The account's attempts on every day. Each account is new to its run, so this is what the run made
+// it spend, also when a suite goes on past midnight UTC and the database counts the rest on the next
+// day.
 export async function getUsage(env, user) {
   const rows = await service(
     env,
-    `/rest/v1/usage?user_id=eq.${user.id}&day=eq.${today()}&select=count`,
+    `/rest/v1/usage?user_id=eq.${user.id}&select=count`,
   );
-  return rows[0]?.count ?? 0;
+  return rows.reduce((sum, row) => sum + row.count, 0);
 }
 
 // Rows written straight to the database, for checks that need more than a day's attempts
@@ -243,13 +253,15 @@ export async function withLimits(env, values, fn) {
   }
 }
 
-export async function globalToday(env) {
+async function globalOn(env, day) {
   const rows = await service(
     env,
-    `/rest/v1/usage_global?day=eq.${today()}&select=count`,
+    `/rest/v1/usage_global?day=eq.${day}&select=count`,
   );
   return rows[0]?.count ?? 0;
 }
+
+export const globalToday = (env) => globalOn(env, today());
 
 export async function globalThisMonth(env) {
   const rows = await service(
@@ -259,12 +271,23 @@ export async function globalThisMonth(env) {
   return rows.reduce((sum, row) => sum + row.count, 0);
 }
 
-export const setGlobalToday = (env, count) =>
-  service(env, "/rest/v1/usage_global?on_conflict=day", {
-    method: "POST",
-    prefer: "resolution=merge-duplicates",
-    body: { day: today(), count },
-  });
+// Reads the global count of the day a run starts on, and returns what puts it back at the end: on
+// that day, even when the run ends after midnight UTC, and without the days after it, which only
+// count the run's own attempts
+export async function saveGlobalCount(env) {
+  const day = today();
+  const count = await globalOn(env, day);
+  return async () => {
+    await service(env, `/rest/v1/usage_global?day=gt.${day}`, {
+      method: "DELETE",
+    });
+    await service(env, "/rest/v1/usage_global?on_conflict=day", {
+      method: "POST",
+      prefer: "resolution=merge-duplicates",
+      body: { day, count },
+    });
+  };
+}
 
 export const ticketsOf = (env, user) =>
   service(

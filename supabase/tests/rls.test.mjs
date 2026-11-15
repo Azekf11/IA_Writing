@@ -6,9 +6,11 @@
 import assert from "node:assert/strict";
 import { after, before, describe, it } from "node:test";
 import {
+  clearOfMidnight,
   client,
   createUser,
   deleteUser,
+  FILE_MARGIN_MS,
   globalToday,
   localStack,
   psql,
@@ -66,6 +68,10 @@ const directAccessClosed = () =>
   psql(
     "select count(*) from supabase_migrations.schema_migrations where version = '20261107000000'",
   )[0] === "1";
+
+// On one UTC day, as in quota.test.mjs: a test reads the day's global count before and after a
+// deletion, and puts it back
+before(() => clearOfMidnight(FILE_MARGIN_MS));
 
 before(async () => {
   a = await createUser(api, "rls-a");
