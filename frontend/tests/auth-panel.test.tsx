@@ -1,4 +1,10 @@
-import { fireEvent, screen, waitFor, within } from "@testing-library/react";
+import {
+  cleanup,
+  fireEvent,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -47,6 +53,9 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  // Unmounted before anything is reset, as in workspace.test.tsx: an editor's effect still waiting
+  // when a test ends would otherwise put its draft back after saveDraft(null)
+  cleanup();
   vi.unstubAllGlobals();
   localStorage.clear();
   sessionStorage.clear();

@@ -1,5 +1,6 @@
 import {
   act,
+  cleanup,
   fireEvent,
   screen,
   waitFor,
@@ -120,6 +121,11 @@ async function submit(text = TEXT) {
 beforeEach(() => refresh.mockReset());
 
 afterEach(() => {
+  // Unmounted before anything is reset: the editor keeps its draft from an effect after each
+  // render, and an effect still waiting when a test ends runs as the editor is unmounted. Left to
+  // the cleanup in setup.ts, which Vitest runs after this hook, it would put back a draft that the
+  // next test then opens on.
+  cleanup();
   // The clipboard outlives a test, and so would a spy that answers in its place
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
@@ -1818,7 +1824,8 @@ describe("RewriteWorkspace", () => {
           stream.send(DONE);
           stream.close();
           await screen.findByText(/A accept, R reject/);
-          expect(heading()).toHaveFocus();
+          // Moved by an effect, which can still be waiting when the review shows
+          await waitFor(() => expect(heading()).toHaveFocus());
         });
 
         it("goes to the heading after Stop itself", async () => {
