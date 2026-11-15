@@ -23,13 +23,12 @@ import {
   deleteUser,
   expect,
   getLimits,
-  globalToday,
   hasPassages,
   localEnv,
   removePassages,
+  saveGlobalCount,
   seedPassages,
   sessionCookies,
-  setGlobalToday,
   setLimits,
   until,
 } from "./lib.mjs";
@@ -188,10 +187,10 @@ async function run() {
       undo.push(() => mock.close());
     }
     const limits = await getLimits(env);
-    const startedAt = await globalToday(env);
+    const putBackGlobalCount = await saveGlobalCount(env);
     undo.push(async () => {
       await setLimits(env, limits);
-      await setGlobalToday(env, startedAt);
+      await putBackGlobalCount();
     });
     await setLimits(env, {
       user_daily: 1000,

@@ -1,5 +1,21 @@
 import { describe, expect, it } from "vitest";
-import { guessLanguage } from "@/lib/style/language";
+import { guessLanguage, soundsEnglish } from "@/lib/style/language";
+
+describe("soundsEnglish", () => {
+  it("hears English in a text too short to guess", () => {
+    expect(guessLanguage("See you on Monday?")).toBeNull();
+    expect(soundsEnglish("See you on Monday?")).toBe(true);
+  });
+
+  it("does not hear it once there is a French word", () => {
+    expect(soundsEnglish("Merci pour le look in!")).toBe(false);
+  });
+
+  it("does not hear it in a text that shows nothing either way", () => {
+    expect(soundsEnglish("Merci beaucoup!")).toBe(false);
+    expect(soundsEnglish("")).toBe(false);
+  });
+});
 
 describe("guessLanguage", () => {
   it("recognizes English", () => {

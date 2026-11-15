@@ -30,6 +30,7 @@ describe("the server's client", () => {
           autoRefreshToken: false,
           detectSessionInUrl: false,
         },
+        db: { timeout: 8_000 },
       },
     );
   });
@@ -50,7 +51,7 @@ describe("the server's client", () => {
     expect(source.split("\n")[0]).toBe('import "server-only";');
   });
 
-  it("is the only place in the app that reads the key, and only the route uses it", () => {
+  it("is the only place in the app that reads the key, and only the two routes use it", () => {
     const files = [
       ...["app", "components", "lib", "i18n", "messages"].flatMap((dir) =>
         readdirSync(join(ROOT, dir), { recursive: true, withFileTypes: true })
@@ -67,6 +68,37 @@ describe("the server's client", () => {
     expect(mentions("SUPABASE_SECRET_KEY")).toEqual([
       "lib/supabase/service.ts",
     ]);
-    expect(mentions("supabase/service")).toEqual(["app/api/rewrite/route.ts"]);
+    // The account route is the one other user, for deleting the signed-in account
+    expect(mentions("supabase/service").sort()).toEqual([
+      "app/api/account/route.ts",
+      "app/api/rewrite/route.ts",
+    ]);
+    // A relative import does not name the module that way, but the file that re-exports the
+    // client, or calls it, names the function
+    expect(mentions("createServiceClient").sort()).toEqual([
+      "app/api/account/route.ts",
+      "app/api/rewrite/route.ts",
+      "lib/supabase/service.ts",
+    ]);
+  });
+
+  // Where a developer reads what the key is for, before setting it
+  it("is described in .env.example by every route that uses it", () => {
+    const template = readFileSync(join(ROOT, ".env.example"), "utf8");
+    const about = template
+      .slice(0, template.indexOf("\nSUPABASE_SECRET_KEY="))
+      .split("\n\n")
+      .at(-1);
+    const routes = readdirSync(join(ROOT, "app/api"), { recursive: true })
+      .map(String)
+      .filter((file) => file.endsWith("route.ts"))
+      .filter((file) =>
+        readFileSync(join(ROOT, "app/api", file), "utf8").includes(
+          "createServiceClient",
+        ),
+      )
+      .map((file) => `/api/${file.replace(/\/route\.ts$/, "")}`);
+    expect(routes.sort()).toEqual(["/api/account", "/api/rewrite"]);
+    for (const route of routes) expect(about).toContain(route);
   });
 });

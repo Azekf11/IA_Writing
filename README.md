@@ -5,7 +5,8 @@ proposes targeted edits with a reason for each, and you accept or reject them on
 copying the result. It is for people who draft with AI tools, or write in a stiff register, and want
 plainer wording without giving up the final say.
 
-Demo: <https://rewrity.vercel.app> (sign-in by email link, a few attempts per day)
+Demo: <https://rewrity.vercel.app> (sign-in by email link, a few attempts per day, as the line above the
+editor says)
 
 ![Home page](docs/images/home.png)
 
@@ -18,12 +19,30 @@ Screens from a local build. The edits in the second one are a sample written by 
 - Returns edits, never a rewritten text. Each edit quotes the original, proposes a replacement and
   says why.
 - Lets you choose how much to change (light, standard, thorough) and paste a sample of your own
-  writing, so the edits stay close to how you write.
+  writing, so the edits stay close to how you write. A rewrite can also be left out of your history:
+  the text still goes to Anthropic and the attempt still counts.
+- Says above the editor how many attempts you have left today and when they reset, or that rewriting
+  is paused. That line is a hint: only the request itself decides.
 - Shows edits as the model writes them. Once the first one is on screen you can stop and keep what has
   arrived.
-- Reviews by mouse or keyboard (A accept, R reject, J and K move). The result can be copied or
-  downloaded.
-- Keeps a history you can search, reopen and delete.
+- Reviews by mouse or keyboard (A accept, R reject, E reword, U undo, J and K move). The words that
+  change are marked inside each edit, you can put your own wording before accepting, and a row at the
+  top of the screen holds what is left to decide, Next to decide and Copy.
+- Shows the result's length against the original. The result can be copied or downloaded, along with a
+  list of the accepted edits (before, after, why). It is a list of edits and says nothing about who
+  wrote a text.
+- Keeps a finished review while you go back to your text, switch language or visit the history, and
+  gives it back, decisions included, when the next rewrite is refused or fails before any edit.
+- Offers "Try an example": a real review of a sample text, with edits written in advance, in the
+  language of the page, with no account, request, attempt or history row. Leaving it empties the box.
+- Has a free check, a second button in the editor. It runs a short list of stock phrases and paste
+  clean-ups in the browser, on up to 50,000 characters, with no account, model, request, attempt or
+  history row. It never scores a text or says who wrote it, and finding nothing says little.
+- Keeps a history you can search, reopen, delete and download. You can also delete your account
+  yourself, and your history goes with it. The sign-in service's own log, which names your address
+  when the account is created, at each sign-in link asked for, at each sign-in and sign-out, at each
+  automatic renewal of the session while you use the site and at the deletion, stays after the
+  account is deleted.
 - Works in English and French, in day, night or system mode.
 
 It is an editor, not a detector. It does not tell who wrote a text and makes no promise about
@@ -35,8 +54,10 @@ the project moved away from detection.
 ```mermaid
 flowchart LR
     subgraph production [Production]
-        B([Browser]) -->|"POST /api/rewrite"| R["Next.js route<br/>Vercel, Dublin"]
-        B -->|"sign-in, deleting history"| S
+        B([Browser]) -->|"POST /api/rewrite,<br/>GET for the allowance"| R["Next.js route<br/>Vercel, Dublin"]
+        B -->|"POST /api/account"| A["Account route<br/>deletes the signed-in account"]
+        B -->|"sign-in, older history rows,<br/>export, deleting history"| S
+        A -->|"delete the account,<br/>secret key"| S
         R -->|"quota, style search, history"| S[("Supabase, Ireland<br/>Auth, Postgres, pgvector")]
         R -->|"text, writing sample,<br/>up to 3 excerpts"| C["Claude<br/>Anthropic API"]
         E["Embedding model<br/>files in the app"] --- R
@@ -94,11 +115,13 @@ None of these calls the real model, and none needs a secret.
 `test:db` and `audit` change limits and counters while they run and put them back afterwards. They
 refuse to run against anything but a local stack. To use a stack started from another folder, set
 `SUPABASE_WORKDIR` to that folder. A production build fetches its fonts from Google, so `e2e` and
-`audit` need network access the first time.
+`audit` need network access the first time. The audit picks its own port for the stand-in, so it can
+run beside `npm run stand-in`.
 
-GitHub Actions runs the first two rows, the corpus row and `test:db`. Nothing measures the quality of
-the edits. [A blind comparison with and without excerpts](docs/research/style-references-comparison.md) is
-written down and has not been run, because it needs real model calls.
+GitHub Actions runs the first two rows, the corpus row, `test:db` and `npm run audit -- limits concurrency`.
+Nothing measures the quality of the edits.
+[A blind comparison with and without excerpts](docs/research/style-references-comparison.md) is written down
+and has not been run, because it needs real model calls.
 
 ## Costs, security, privacy and limits
 
@@ -111,35 +134,48 @@ workspace of its own at Anthropic ([docs/DEPLOY.md](docs/DEPLOY.md#two-separate-
 has started it stays counted, even if it ends in an error, a refusal or a cancelled stream.
 
 **Security.** Nothing paid runs without a signed-in user and a ticket granted by the database. If the
-quota check fails, the model is not called. The quota functions, the corpus search and writing to the
-history are for the server alone, with a secret key that never reaches a browser and the account taken from
-the verified session: a user's token is refused on all of them. Row-level security limits each history to
-its owner, who can read and delete it.
+quota check fails, the model is not called. The route calls the quota functions and the corpus search and
+writes to the history with a secret key that never reaches a browser and the account taken from the verified
+session: a user's token is refused on those functions. Row-level security limits each history to its owner,
+who can read and delete it. Deleting an account goes through a second route, which uses that key for nothing
+else and only on the account of the verified session.
+
+Until `20261107000000_close_direct_access.sql` (pull request #9, on hold) is applied, signed-in users can still
+call the six older quota and search functions, under the same limits, and insert rows into their own history
+([the rollout](docs/DEPLOY.md#moving-a-running-site-to-server-only-operations)).
 
 **Privacy.**
 
-| Data                | Reaches the browser   | Stored in Supabase                        | Sent to Anthropic |
-| ------------------- | --------------------- | ----------------------------------------- | ----------------- |
-| Your text           | Yes                   | Yes, in your history, until you delete it | Yes               |
-| Suggested edits     | Yes                   | Yes, in your history                      | Written by it     |
-| Your writing sample | Typed there           | No                                        | Yes               |
-| Style excerpts      | Only author and title | Yes, as the corpus                        | Up to 3 per call  |
-| Email address       | Yes, your own         | Yes, by Supabase Auth                     | No                |
-| Attempts per day    | No                    | Yes, a counter, and a ticket for each one | No                |
+| Data                | Reaches the browser   | Stored in Supabase                                                                              | Sent to Anthropic |
+| ------------------- | --------------------- | ----------------------------------------------------------------------------------------------- | ----------------- |
+| Your text           | Yes                   | Yes, in your history until you delete it, unless you tick "Do not keep this text in my history" | Yes, even then    |
+| Suggested edits     | Yes                   | Yes, in your history, unless you tick that box                                                  | Written by it     |
+| Your writing sample | Typed there           | No                                                                                              | Yes               |
+| Style excerpts      | Only author and title | Yes, as the corpus                                                                              | Up to 3 per call  |
+| Email address       | Yes, your own         | Yes, by Supabase Auth                                                                           | No                |
+| Attempts per day    | Your own count        | Yes, a counter, and a ticket for each one                                                       | No                |
+
+A rewrite left out of the history adds no row, but its text still goes to Anthropic and the attempt still
+counts. The example and the free check run in the browser and send nothing. Asking for a sign-in link keeps a
+copy of the text, never the writing sample, in that browser until you are back in the editor or sign out, and
+that copy is ignored after an hour. From the history page you can download your history and delete your account,
+and the rows tied to the account go with it.
 
 The browser only ever gets an excerpt's author and title. With `STYLE_REFERENCES=off`, no excerpt is
 read or sent. Stored text is not encrypted against the project's owner, who can read it. Tickets are kept
 at least two days and removed at a later accepted attempt. Supabase Auth can record an IP address and
-browser for sign-ins. Logs carry one line per attempt, with the model, durations, the state it ended in and
-token counts, along with error codes and counts of dropped edits, and never a text. Anthropic handles what
-it receives under its own terms.
+browser each time a reader's browser calls it, to ask for a link, sign in, sign out or renew a session.
+Logs carry one line per attempt, with the model, durations, the state it ended in and token counts, along
+with error codes and counts of dropped edits, and never a text. Anthropic handles what it receives under
+its own terms.
 
 **Limits you should know about.**
 
 - Nobody has measured whether the edits are good, or whether the style excerpts improve them.
-- The automatic checks on an edit compare numbers, units, figures attributed to a name, denials, length
-  and markup. They read words and figures, not meaning: "rose" becoming "fell", or a denial that moves
-  within a sentence, gets through. That is why every edit is shown for review
+- The automatic checks on an edit compare numbers, units, figures attributed to a name, denials, the
+  bound next to a figure (at least, under), length and markup. They read words and figures, not
+  meaning: "rose" becoming "fell", or a denial that moves within a sentence, gets through. That is why
+  every edit is shown for review
   ([what they cannot see](docs/ARCHITECTURE.md#checks-on-the-models-output)).
 - The ceilings protect the budget, not availability: three accounts can use up a day's allowance
   for everyone. The code creates an account for any email address; whether sign-ups are open is a
@@ -147,8 +183,18 @@ it receives under its own terms.
 - Web excerpts are not proven human. Only a date cut-off and a list of sites lower that risk. Many
   are copyrighted by their publishers ([details](docs/STYLE_CORPUS.md#licences-and-credits)).
 - A sign-in link works once, in the browser that asked for it.
-- The history page lists and searches the 50 most recent rewrites, and there is no self-service account
-  deletion. The sign-in email comes from one Supabase template, so it has one language.
+- A review lasts as long as the tab. A reload or a closed tab loses it and any unsent text. History >
+  Reopen brings a kept rewrite back with every decision pending and the model's suggestions, not your
+  wordings. A rewrite left out of the history has no such way back.
+- The free check is a short list. What it misses says nothing about a text. On pasted Markdown it can
+  propose removing heading or bold marks. It leaves alone table padding, code between backticks on one
+  line, and blocks fenced with three backticks that start a line and are closed again; an indented or
+  unclosed fence is checked like prose. Lines of `#` right next to a line that starts like a command
+  (in lower case from a to z, or with `$`, `.`, `/` or `~/`) are not taken for headings, but what
+  follows the `#` is still checked, and a stock phrase that fills such a line can be removed with its
+  `#`; any other shell comment, such as one above a blank line, can be taken for a heading.
+- The history page lists the 50 most recent rewrites, Load more reaches older ones, and search covers
+  the loaded rows only. The sign-in email comes from one Supabase template, so it has one language.
 
 ## Documentation
 

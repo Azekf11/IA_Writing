@@ -3,9 +3,27 @@ name: Frontend
 on:
   push:
     branches: [main]
-    paths: ["frontend/**", ".github/workflows/frontend.yml"]
+    # Besides the app: every file outside frontend/ that its unit tests read
+    paths:
+      - "frontend/**"
+      - ".github/**"
+      - "docs/research/comparison-texts.json"
+      - "supabase/tests/local-stack.mjs"
+      - "supabase/tests/utc-day.mjs"
+      - "supabase/migrations/**"
+      - "corpus-pipeline/uv.lock"
   pull_request:
-    paths: ["frontend/**", ".github/workflows/frontend.yml"]
+    paths:
+      - "frontend/**"
+      - ".github/**"
+      - "docs/research/comparison-texts.json"
+      - "supabase/tests/local-stack.mjs"
+      - "supabase/tests/utc-day.mjs"
+      - "supabase/migrations/**"
+      - "corpus-pipeline/uv.lock"
+
+permissions:
+  contents: read
 
 jobs:
   check:
@@ -18,14 +36,18 @@ jobs:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
         with:
-          node-version: 24
+          node-version-file: frontend/package.json
           cache: npm
           cache-dependency-path: frontend/package-lock.json
       - run: npm ci
       - run: npx prettier --check .
       - run: npm run lint
       - run: npm run typecheck
+      # Far from UTC, the runner's own zone, where a local day or a local midnight taken for the UTC
+      # one would pass
       - run: npm test
+        env:
+          TZ: Asia/Tokyo
       # Placeholder values: the build never talks to Supabase or Claude
       - run: npm run build
         env:
@@ -34,3 +56,10 @@ jobs:
       # Browser tests mock the API, so no secrets are needed
       - run: npx playwright install --with-deps chromium
       - run: npm run e2e
+      # The traces and screenshots of the tests that failed
+      - uses: actions/upload-artifact@v7
+        if: failure()
+        with:
+          name: e2e-results
+          path: frontend/test-results/
+          retention-days: 7

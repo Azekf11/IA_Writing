@@ -1,0 +1,51 @@
+import type { RuleSet } from "./scan";
+
+// Phrases only, and only those that say nothing a reader would miss: a single word is too often right
+export const RULES_EN: RuleSet = {
+  openers: [
+    "in today's (fast-paced|digital|ever-changing|rapidly changing|modern) (world|age|era),",
+    "it('s| is) important to (note|remember) that",
+    "it('s| is) worth (noting|mentioning|pointing out) that",
+    "it should be noted that",
+    "it('s| is) crucial to understand that",
+    "it goes without saying that",
+    "needless to say,",
+    "as we all know,",
+    "here('s| is) the thing:",
+    "without further ado,",
+    "moreover,",
+    "furthermore,",
+    "additionally,",
+  ],
+  closers: [
+    "in conclusion,",
+    "in summary,",
+    "to sum up,",
+    "to summari(s|z)e,",
+    "all in all,",
+  ],
+  wrappers: ["i hope this helps", "let that sink in"],
+  greetings: ["certainly", "great question"],
+  filler: [
+    ["in order to", "to"],
+    ["due to the fact that", "because"],
+    ["despite the fact that", "although"],
+    ["in the event that", "if"],
+    ["at this point in time", "now"],
+    ["for the purpose of", "for"],
+    ["first and foremost", "first"],
+    ["each and every", "every"],
+  ],
+  inflated: [
+    ["plays a (crucial|pivotal|vital|key) role in", "matters for"],
+    ["play a (crucial|pivotal|vital|key) role in", "matter for"],
+    ["(is|stands as|serves as) a testament to", "shows"],
+    ["are a testament to", "show"],
+    ["delve into", "look into"],
+    ["delves into", "looks into"],
+    ["delved into", "looked into"],
+    ["delving into", "looking into"],
+    ["a (rich|vibrant) tapestry of", "a mix of"],
+    ["the ever-(evolving|changing) landscape of", "the world of"],
+  ],
+};

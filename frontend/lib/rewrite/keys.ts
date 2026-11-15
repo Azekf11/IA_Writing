@@ -1,21 +1,31 @@
 import type { Decision } from "./apply";
 import type { Edit } from "./types";
 
-export type ReviewKey = "accept" | "reject" | "next" | "previous";
+export type ReviewKey =
+  "accept" | "reject" | "reword" | "undo" | "next" | "previous";
 
-// Letters only, no modifier: a shortcut must never steal Ctrl+C, Cmd+R or browser keys
+// Letters only, no modifier: a shortcut must never steal Ctrl+C, Cmd+R or browser keys. Shift
+// counts as one too; a capital typed with Caps Lock comes without it.
+// A held key repeats: moving can go on, but one press is one decision.
 export function reviewKey(event: {
   key: string;
   ctrlKey: boolean;
   metaKey: boolean;
   altKey: boolean;
+  shiftKey?: boolean;
+  repeat?: boolean;
 }): ReviewKey | null {
-  if (event.ctrlKey || event.metaKey || event.altKey) return null;
+  if (event.ctrlKey || event.metaKey || event.altKey || event.shiftKey)
+    return null;
   switch (event.key.toLowerCase()) {
     case "a":
-      return "accept";
+      return event.repeat ? null : "accept";
     case "r":
-      return "reject";
+      return event.repeat ? null : "reject";
+    case "e":
+      return event.repeat ? null : "reword";
+    case "u":
+      return event.repeat ? null : "undo";
     case "j":
       return "next";
     case "k":
@@ -63,4 +73,15 @@ export function nextPending(
     if (!decisions[edit.id] || decisions[edit.id] === "pending") return edit.id;
   }
   return after;
+}
+
+// What the letters act on after a decision: the next edit waiting for one. None when all are
+// decided, so that a letter pressed after the last decision cannot flip it.
+export function markAfter(
+  edits: Edit[],
+  decisions: Record<string, Decision>,
+  after: string,
+): string | null {
+  const to = nextPending(edits, decisions, after);
+  return !decisions[to] || decisions[to] === "pending" ? to : null;
 }

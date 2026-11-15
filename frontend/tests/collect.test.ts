@@ -31,6 +31,15 @@ describe("EditCollector", () => {
     expect(collector.result().map((e) => e.id)).toEqual(["edit-1", "edit-0"]);
   });
 
+  it("delivers title case taken off, and only counts the rest as unchanged", () => {
+    const collector = new EditCollector("Five Ways To Win. The Internet.");
+    expect(
+      collector.add(raw("Five Ways To Win", "Five ways to win")),
+    ).toMatchObject({ replacement: "Five ways to win", start: 0, end: 16 });
+    expect(collector.add(raw("The Internet", "The internet"))).toBeNull();
+    expect(collector.dropped).toEqual({ unchanged: 1 });
+  });
+
   it("drops an edit that changes a number", () => {
     const collector = new EditCollector(TEXT);
     expect(collector.add(raw("rose 12%", "rose 15%"))).toBeNull();

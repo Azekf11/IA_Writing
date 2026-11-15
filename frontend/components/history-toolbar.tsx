@@ -2,7 +2,7 @@
 
 import { Search } from "lucide-react";
 import { useTranslations } from "next-intl";
-import { useState } from "react";
+import { useRef } from "react";
 import { useTypedEarly } from "@/components/use-typed-early";
 
 const quiet =
@@ -12,8 +12,12 @@ type Props = {
   count: number;
   query: string;
   onQuery: (value: string) => void;
+  // Whether Delete all is asking. The list holds it, and says the question on its status line.
+  confirming: boolean;
+  onConfirming: (asking: boolean) => void;
   onClear: () => void;
   busy: boolean;
+  searchId: string;
 };
 
 // Search box, entry count, and a delete-all that asks twice. The question gets its own line:
@@ -23,12 +27,22 @@ export function HistoryToolbar({
   count,
   query,
   onQuery,
+  confirming,
+  onConfirming,
   onClear,
   busy,
+  searchId,
 }: Props) {
   const t = useTranslations("History");
-  const [confirming, setConfirming] = useState(false);
   const box = useTypedEarly<HTMLInputElement>(query, onQuery);
+  const clearAll = useRef<HTMLButtonElement>(null);
+
+  // The question's line goes either way: the keyboard goes back to the button that opened it, which
+  // stays on the page while the answer runs
+  const close = () => {
+    onConfirming(false);
+    clearAll.current?.focus();
+  };
 
   return (
     <div className="flex flex-wrap items-center justify-between gap-3">
@@ -40,19 +54,21 @@ export function HistoryToolbar({
         />
         <input
           ref={box}
+          id={searchId}
           type="search"
           value={query}
           onChange={(event) => onQuery(event.target.value)}
           placeholder={t("search")}
-          className="w-full rounded-lg border border-border bg-surface py-2 pl-9 pr-3 text-sm transition-colors placeholder:text-muted/70 focus:border-accent"
+          className="w-full rounded-lg border border-border bg-surface py-2 pl-9 pr-3 text-sm transition-colors placeholder:text-muted focus:border-accent max-sm:text-base"
         />
       </label>
 
       <div className="flex items-center gap-3 text-sm text-muted">
         <span>{t("count", { count })}</span>
         <button
+          ref={clearAll}
           type="button"
-          onClick={() => setConfirming(true)}
+          onClick={() => onConfirming(true)}
           className={quiet}
         >
           {t("clear")}
@@ -65,23 +81,19 @@ export function HistoryToolbar({
           aria-label={t("clear")}
           className="flex w-full flex-wrap items-center justify-end gap-2 text-sm"
         >
-          <span role="status">{t("clearConfirm", { count })}</span>
+          <span>{t("clearConfirm", { count })}</span>
           <button
             type="button"
             onClick={() => {
               onClear();
-              setConfirming(false);
+              close();
             }}
             disabled={busy}
             className="rounded-md bg-remove-soft px-2 py-1 text-xs font-medium text-remove"
           >
             {t("clearYes")}
           </button>
-          <button
-            type="button"
-            onClick={() => setConfirming(false)}
-            className={quiet}
-          >
+          <button type="button" onClick={close} className={quiet}>
             {t("clearNo")}
           </button>
         </div>

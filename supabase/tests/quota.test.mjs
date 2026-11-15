@@ -3,12 +3,20 @@
 // with the secret key and the account from the session. User tokens only get refusals.
 // Run: npm run test:db   (from frontend/; see README)
 import assert from "node:assert/strict";
-import { after, before, describe, it } from "node:test";
+import { after, before, describe, it, mock } from "node:test";
+import {
+  finishRewrite,
+  releaseQuota,
+  reserveQuota,
+  startRewrite,
+} from "../../frontend/lib/rewrite/quota.ts";
 import {
   age,
+  clearOfMidnight,
   client,
   createUser,
   deleteUser,
+  FILE_MARGIN_MS,
   getLimits,
   globalOn,
   globalThisMonth,
@@ -101,6 +109,9 @@ const tally = (responses) => {
   }
   return out;
 };
+
+// First, so that the scene below is saved on the day the whole file runs on
+before(() => clearOfMidnight(FILE_MARGIN_MS));
 
 before(async () => {
   shipped = await getLimits(api);
@@ -1018,6 +1029,113 @@ describe("who may call these functions", () => {
     );
     assert.notEqual(response.status, 200);
     assert.equal(await userToday(api, u), 0);
+  });
+});
+
+// The route's own code against the real functions. The two spell the names out separately, and
+// PostgREST finds a function by its argument names: a rename on either side fails every rewrite,
+// while the unit tests (their rpc is mocked) and the tests above (their own calls) stay green.
+describe("the quota code the route runs", () => {
+  const route = {
+    rpc: async (name, args) => {
+      const { status, body } = await server(name, args);
+      return status < 300
+        ? { data: body, error: null }
+        : { data: null, error: body };
+    },
+  };
+  const reserved = async (u) => {
+    const answer = await reserveQuota(route, u.id);
+    assert.equal(answer.ok, true, JSON.stringify(answer));
+    return answer.ticket;
+  };
+  const refused = (code, status) => ({ ok: false, code, status });
+
+  for (const outcome of ["succeeded", "failed", "cancelled"]) {
+    it(`takes an attempt through reserve and start, to ${outcome}`, async () => {
+      await limits({});
+      const u = await user(`route-${outcome}`);
+      const id = await reserved(u);
+      assert.equal((await ticket(api, id)).state, "reserved");
+      assert.deepEqual(await startRewrite(route, u.id, id), { ok: true });
+      assert.equal((await ticket(api, id)).state, "started");
+      await finishRewrite(route, u.id, id, outcome);
+      assert.equal((await ticket(api, id)).state, outcome);
+      assert.equal(await userToday(api, u), 1);
+    });
+  }
+
+  it("gives back an attempt that never started", async () => {
+    await limits({});
+    const u = await user("route-release");
+    const id = await reserved(u);
+    await releaseQuota(route, u.id, id);
+    assert.equal((await ticket(api, id)).state, "released");
+    assert.equal(await userToday(api, u), 0);
+  });
+
+  it("turns an account's limits into the codes the page translates", async () => {
+    await limits({ max_in_flight: 1 });
+    const busy = await user("route-busy");
+    await reserved(busy);
+    assert.deepEqual(
+      await reserveQuota(route, busy.id),
+      refused("too_many_requests", 429),
+    );
+
+    await limits({ user_daily: 1 });
+    const spent = await user("route-spent");
+    await reserved(spent);
+    assert.deepEqual(
+      await reserveQuota(route, spent.id),
+      refused("quota_exceeded", 429),
+    );
+  });
+
+  it("turns the app's ceilings into their code, at reserve and at start", async () => {
+    await limits({});
+    const u = await user("route-ceiling");
+    const held = await reserved(u);
+    for (const ceiling of [
+      { global_daily: await globalToday(api) },
+      { global_monthly: await globalThisMonth(api) },
+    ]) {
+      await limits(ceiling);
+      const atReserve = await reserveQuota(route, u.id);
+      assert.deepEqual(atReserve, refused("global_quota_exceeded", 429));
+      const atStart = await startRewrite(route, u.id, held);
+      assert.deepEqual(atStart, refused("global_quota_exceeded", 429));
+    }
+  });
+
+  it("treats a missing or deleted account as signed out", async () => {
+    await limits({});
+    const unauthorized = refused("unauthorized", 401);
+    assert.deepEqual(await reserveQuota(route, null), unauthorized);
+    assert.deepEqual(
+      await reserveQuota(route, crypto.randomUUID()),
+      unauthorized,
+    );
+  });
+
+  it("does not start a ticket that is already closed", async () => {
+    await limits({});
+    const logged = mock.method(console, "error", () => {});
+    try {
+      const u = await user("route-closed");
+      const id = await reserved(u);
+      await releaseQuota(route, u.id, id);
+      assert.deepEqual(
+        await startRewrite(route, u.id, id),
+        refused("server_error", 500),
+      );
+      assert.deepEqual(logged.mock.calls[0].arguments, [
+        "start_rewrite failed",
+        "ticket not live",
+      ]);
+    } finally {
+      logged.mock.restore();
+    }
   });
 });
 

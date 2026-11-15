@@ -3,18 +3,36 @@
 // what it received, so the audit can check what the route sent.
 //
 // Magic words in the user's text steer it:
-//   SLOW       answers after 3 s (to hold a request in flight)
-//   FAILAPI    answers 529 "overloaded"
-//   REFUSE     declines: stop_reason "refusal"
-//   TRUNCATE   runs out of tokens after the first edit: stop_reason "max_tokens"
-//   TOOLONG    runs out of tokens before any edit is complete
-//   CUTOFF     the connection dies after the first edit
-//   MISSING    adds an edit whose quote is not in the text
-//   ALLBAD     proposes only an edit whose quote is not in the text
-//   REVERSE    writes its edits last to first
-//   12%        adds an edit that changes the number
+//   SLOW         answers after 3 s (to hold a request in flight)
+//   FAILAPI      answers 529 "overloaded"
+//   FAILCREDIT   answers 400: no credit left on the account
+//   FAILBILLING  answers 402 "billing_error"
+//   FAILAUTH     answers 401: the key is rejected
+//   FAILRATE     answers 429: rate limited
+//   REFUSE       declines: stop_reason "refusal"
+//   TRUNCATE     runs out of tokens after the first edit: stop_reason "max_tokens"
+//   TOOLONG      runs out of tokens before any edit is complete
+//   CUTOFF       the connection dies after the first edit
+//   MISSING      adds an edit whose quote is not in the text
+//   ALLBAD       proposes only an edit whose quote is not in the text
+//   REVERSE      writes its edits last to first
+//   12%          adds an edit that changes the number
 import http from "node:http";
 import { fileURLToPath } from "node:url";
+
+// Each word that makes the service fail, then the status, type and message it answers with
+const FAILURES = [
+  ["FAILAPI", 529, "overloaded_error", "Overloaded"],
+  [
+    "FAILCREDIT",
+    400,
+    "invalid_request_error",
+    "Your credit balance is too low to access the Anthropic API.",
+  ],
+  ["FAILBILLING", 402, "billing_error", "This request could not be billed."],
+  ["FAILAUTH", 401, "authentication_error", "invalid x-api-key"],
+  ["FAILRATE", 429, "rate_limit_error", "Too many requests."],
+];
 
 export function startMockAnthropic(port) {
   const received = [];
@@ -49,14 +67,11 @@ export function startMockAnthropic(port) {
         setTimeout(r, text.includes("SLOW") ? 3000 : state.delayMs),
       );
 
-      if (text.includes("FAILAPI")) {
-        res.writeHead(529, { "content-type": "application/json" });
-        res.end(
-          JSON.stringify({
-            type: "error",
-            error: { type: "overloaded_error", message: "Overloaded" },
-          }),
-        );
+      const failure = FAILURES.find(([word]) => text.includes(word));
+      if (failure) {
+        const [, status, type, message] = failure;
+        res.writeHead(status, { "content-type": "application/json" });
+        res.end(JSON.stringify({ type: "error", error: { type, message } }));
         return;
       }
 
@@ -85,16 +100,20 @@ export function startMockAnthropic(port) {
     });
   });
 
-  return new Promise((resolve) =>
+  return new Promise((resolve, reject) => {
+    // A port already taken would otherwise end the process, past the clean-up of whoever called
+    server.on("error", reject);
     server.listen(port, "127.0.0.1", () =>
       resolve({
+        // The one it got, when asked for port 0
+        port: server.address().port,
         received,
         state,
         reset: () => (received.length = 0),
         close: () => new Promise((r) => server.close(r)),
       }),
-    ),
-  );
+    );
+  });
 }
 
 // `npm run stand-in`: on its own, for a local demo without an API key (see the root README)

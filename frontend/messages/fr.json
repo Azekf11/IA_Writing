@@ -1,7 +1,7 @@
 {
   "Metadata": {
     "title": "Rewrity",
-    "description": "Corrigez votre texte pour qu'il sonne comme écrit par une personne. Vous validez chaque changement."
+    "description": "Modifiez votre texte pour qu'il sonne comme écrit par une personne. Vous validez chaque changement."
   },
   "Home": {
     "title": "Rewrity",
@@ -14,18 +14,47 @@
     "demoRewrite": "Bien communiquer aide les gens à se rapprocher.",
     "demoReason": "Retire l'ouverture toute faite et les mots gonflés.",
     "sourcesTitle": "D'où viennent les références de style",
-    "sourcesBody": "Livres et essais du domaine public, journaux anciens, et articles récents de presse et de magazines (jusqu'en 2022, avant que les textes écrits par IA ne deviennent courants en ligne). Jusqu'à trois extraits sont envoyés à Anthropic avec votre texte pour guider les corrections ; votre navigateur ne reçoit que leur source."
+    "sourcesBody": "Livres et essais du domaine public, journaux anciens, et articles récents de presse et de magazines (jusqu'en 2022, avant que les textes écrits par IA ne deviennent courants en ligne). Jusqu'à trois extraits sont envoyés à Anthropic avec votre texte pour guider les modifications ; votre navigateur ne reçoit que leur source."
   },
   "Editor": {
     "label": "Votre texte",
     "placeholder": "Collez ou saisissez votre texte ici...",
     "words": "{count, plural, one {# mot} other {# mots}}",
-    "characters": "{count} / {max} caractères",
+    "characters": "{count, number} / {max, number} caractères",
     "rewrite": "Réécrire",
     "rewriting": "Réécriture...",
-    "tooLong": "Ce texte est trop long. La limite est de {max} caractères.",
+    "tooLong": "Ce texte est trop long. La limite est de {max, number} caractères.",
+    "checkTooLong": "Ce texte est trop long, même pour la vérification gratuite. Sa limite est de {max, number} caractères.",
     "example": "Essayer un exemple",
     "exampleText": "Dans un monde en constante évolution, il est crucial de comprendre que la communication efficace joue un rôle essentiel dans la création de liens significatifs. De plus, il est important de noter que l'écoute n'est pas seulement une compétence, mais un voyage. En conclusion, en adoptant ces principes, nous pouvons libérer tout notre potentiel.",
+    "exampleEdits": [
+      {
+        "original": "Dans un monde en constante évolution, il est crucial de comprendre que la communication efficace",
+        "replacement": "La communication efficace",
+        "reason": "Retire une ouverture toute faite qui ne dit rien du sujet."
+      },
+      {
+        "original": "joue un rôle essentiel dans la création de liens significatifs",
+        "replacement": "aide les gens à se rapprocher",
+        "reason": "Dit ce qu'elle fait, sans les mots gonflés."
+      },
+      {
+        "original": "De plus, il est important de noter que l'écoute",
+        "replacement": "L'écoute",
+        "reason": "Du remplissage : la phrase peut le dire directement."
+      },
+      {
+        "original": "n'est pas seulement une compétence, mais un voyage",
+        "replacement": "est une compétence qui se travaille",
+        "reason": "Retire un contraste mis en scène pour l'effet."
+      },
+      {
+        "original": "En conclusion, en adoptant ces principes, nous pouvons libérer tout notre potentiel.",
+        "replacement": "Ces principes nous aident à donner le meilleur de nous-mêmes.",
+        "reason": "Remplace une formule de conclusion toute faite par une phrase simple."
+      }
+    ],
+    "check": "Vérification gratuite",
     "options": "Options",
     "strength": "Ampleur des changements",
     "strengths": {
@@ -34,15 +63,27 @@
       "thorough": "Poussé"
     },
     "strengthHint": {
-      "light": "Seulement les signes les plus nets.",
-      "standard": "Les signes nets, et les plus discrets quand ils s'accumulent.",
-      "thorough": "Aussi les signes discrets et les tournures plates."
+      "light": "Seulement les formules toutes faites les plus évidentes.",
+      "standard": "Les formules évidentes, et les plus discrètes quand elles s'accumulent.",
+      "thorough": "Aussi les formules discrètes et les tournures plates."
     },
     "voice": "Votre propre écriture (facultatif)",
-    "voiceHint": "Collez quelques lignes de vous. Les corrections resteront proches de votre façon d'écrire. Envoyé avec cette demande, non conservé.",
+    "voiceShort": "Votre propre écriture",
+    "voiceHint": "Collez quelques lignes de vous. Les modifications resteront proches de votre façon d'écrire. Envoyé avec cette demande, non conservé.",
     "voicePlaceholder": "Un paragraphe d'un e-mail, d'un essai ou d'un message de vous...",
-    "voiceCount": "{count} / {max}",
-    "stop": "Arrêter"
+    "voiceCount": "{count, number} / {max, number}",
+    "dontKeep": "Ne pas conserver ce texte dans mon historique",
+    "dontKeepShort": "Non conservé",
+    "dontKeepHint": "Le texte est tout de même envoyé à Anthropic pour les suggestions, et la tentative compte quand même. La relecture n'existe alors que sur cette page.",
+    "stop": "Arrêter",
+    "backToReview": "Revenir à la relecture",
+    "notice": "Votre texte est envoyé à Anthropic pour les suggestions et reste dans votre historique jusqu'à ce que vous le supprimiez. La vérification gratuite se fait dans votre navigateur et n'envoie rien. <privacy>Confidentialité</privacy>",
+    "noticeNotKept": "Votre texte est envoyé à Anthropic pour les suggestions et, comme vous l'avez demandé, n'est pas ajouté à votre historique. La vérification gratuite se fait dans votre navigateur et n'envoie rien. <privacy>Confidentialité</privacy>"
+  },
+  "Allowance": {
+    "visitor": "Jusqu'à {limit, plural, one {# réécriture gratuite} other {# réécritures gratuites}} par jour avec une adresse e-mail.",
+    "member": "{left, plural, =0 {Plus aucune tentative aujourd'hui.} one {Il vous reste au plus # tentative sur {limit} aujourd'hui.} other {Il vous reste au plus # tentatives sur {limit} aujourd'hui.}} Réinitialisation à {time}.",
+    "paused": "La réécriture est en pause pour le moment."
   },
   "LanguageSwitcher": {
     "label": "Langue"
@@ -53,37 +94,113 @@
   },
   "Review": {
     "title": "Modifications suggérées",
-    "noEdits": "Rien à changer : ce texte paraît déjà naturel.",
-    "summary": "{accepted} acceptée(s) sur {total}",
+    "noEdits": "Rien à changer : ce texte paraît déjà naturel.",
+    "checkNoEdits": "Rien de la liste n'apparaît dans ce texte. Elle est courte : des formules toutes faites et des nettoyages après collage, rien de plus.",
+    "checkMore": "{more, plural, one {Une autre modification n'est pas affichée.} other {# autres modifications ne sont pas affichées.}} Acceptez celles-ci, choisissez Modifier ce résultat, puis relancez la vérification.",
+    "sourceNotice": {
+      "sample": "Un exemple, avec des modifications préparées à l'avance. Rien n'a été envoyé, aucune tentative n'a été utilisée et rien ne va dans votre historique.",
+      "check": "Vérification gratuite : une courte liste de formules toutes faites et de nettoyages après collage, exécutée dans votre navigateur. Rien n'a été envoyé, aucune tentative n'a été utilisée et rien ne va dans votre historique."
+    },
+    "checkReason": {
+      "opener": "Une ouverture toute faite. La phrase tient sans elle.",
+      "closer": "Une formule de conclusion toute faite. La phrase tient sans elle.",
+      "wrapper": "S'adresse au lecteur à propos du texte au lieu d'en faire partie.",
+      "filler": "Du remplissage. Moins de mots disent la même chose.",
+      "inflated": "Une formulation souvent gonflée. Vérifiez que les mots plus simples disent bien ce que vous voulez dire.",
+      "invisible": "Un caractère invisible, souvent laissé par un copier-coller.",
+      "markup": "Des marques de mise en forme qui s'affichent ici comme de simples caractères.",
+      "spaces": "Une espace en trop.",
+      "frenchSpacing": "La typographie française demande ici une espace insécable."
+    },
+    "summary": "{accepted, plural, one {# acceptée} other {# acceptées}}, {rejected, plural, one {# refusée} other {# refusées}}, {pending} à décider",
+    "next": "Prochaine à décider",
+    "keepsOriginal": "{count, plural, one {La modification encore à décider garde le texte d'origine.} other {Les # modifications encore à décider gardent le texte d'origine.}}",
     "accept": "Accepter",
     "reject": "Refuser",
     "undo": "Annuler",
+    "undoLast": "Annuler la dernière décision",
     "acceptAll": "Tout accepter",
     "rejectAll": "Tout refuser",
+    "acceptRest": "Accepter le reste",
+    "rejectRest": "Refuser le reste",
+    "stateAccepted": "Acceptée",
+    "stateRejected": "Refusée",
     "result": "Résultat",
     "copy": "Copier le texte",
+    "copyShort": "Copier",
     "copied": "Copié",
-    "backToEditor": "Modifier le texte",
-    "removed": "Avant",
-    "added": "Après",
+    "copyFailed": "Impossible de copier le texte. Il est sélectionné : vous pouvez le copier vous-même.",
+    "editResult": "Modifier ce résultat",
+    "backToEditor": "Revenir au texte d'origine",
+    "leaveSample": "Utiliser votre propre texte",
+    "removed": "Avant :",
+    "added": "Après :",
     "emptyReplacement": "(supprimé)",
-    "inspiredBy": "Références de style : {authors}",
-    "found": "{count, plural, =0 {Recherche de corrections...} one {# correction pour l'instant} other {# corrections pour l'instant}}",
+    "inspiredBy": "Références de style : {authors}",
+    "found": "{count, plural, one {# modification pour l'instant} other {# modifications pour l'instant}}",
     "stopped": "Arrêté. Voici ce qui a été trouvé jusque-là.",
-    "cutShort": "La réponse s'est interrompue. Voici ce qui est arrivé.",
+    "cutShort": "La réponse s'est interrompue. Voici les suggestions reçues jusque-là.",
     "download": "Télécharger .txt",
-    "shortcuts": "A accepter, R refuser, J et K naviguer"
+    "shortcuts": "A accepter, R refuser, E reformuler, U annuler, J et K naviguer",
+    "reword": "Reformuler",
+    "reworded": "Votre formulation",
+    "rewordLabel": "Votre formulation",
+    "rewordSave": "Accepter cette formulation",
+    "rewordCancel": "Annuler",
+    "rewordBlank": "Écrivez quelque chose ici, ou annulez pour garder la suggestion.",
+    "rewordKeys": "Ctrl+Entrée accepte, Échap annule",
+    "rewordCheck": "Vérifiez avant d'accepter. Le choix vous appartient.",
+    "rewordWarning": {
+      "numbers_changed": "Les nombres ne sont plus ceux du texte d'origine.",
+      "units_changed": "Une unité n'est plus celle du texte d'origine.",
+      "figures_swapped": "Un chiffre est désormais associé à un autre nom.",
+      "negation_changed": "Une négation a changé par rapport au texte d'origine.",
+      "bounds_changed": "Une limite comme « au moins » ou « au plus » a changé."
+    },
+    "length": {
+      "words": "{count, plural, one {# mot} other {# mots}}",
+      "characters": "{count, plural, one {# caractère} other {# caractères}}",
+      "changed": "{count} ({difference})"
+    },
+    "list": {
+      "label": "Les modifications que vous avez acceptées, avant et après, avec la raison de chacune.",
+      "title": "Liste des modifications acceptées : {count}",
+      "before": "Avant :",
+      "after": "Après :",
+      "why": "Pourquoi :",
+      "copy": "Copier la liste",
+      "download": "Télécharger la liste",
+      "copyFailed": "Impossible de copier la liste. Vous pouvez la télécharger à la place."
+    },
+    "status": {
+      "waiting": "Réécriture de votre texte en cours.",
+      "writing": "{count, plural, one {# modification reçue.} other {# modifications reçues.}}",
+      "ready": "{count, plural, =0 {Plus rien à décider.} one {# modification à examiner.} other {# modifications à examiner.}}",
+      "none": "Aucune modification à proposer.",
+      "stopped": "Réécriture arrêtée. {count, plural, =0 {Plus rien à décider.} one {# modification à examiner.} other {# modifications à examiner.}}",
+      "cutShort": "La réponse s'est interrompue. {count, plural, =0 {Plus rien à décider.} one {# modification à examiner.} other {# modifications à examiner.}}",
+      "accepted": "Acceptée. {left, plural, =0 {Plus rien à décider.} one {Il reste # modification à décider.} other {Il reste # modifications à décider.}}",
+      "rejected": "Refusée. {left, plural, =0 {Plus rien à décider.} one {Il reste # modification à décider.} other {Il reste # modifications à décider.}}",
+      "reworded": "Acceptée avec votre formulation. {left, plural, =0 {Plus rien à décider.} one {Il reste # modification à décider.} other {Il reste # modifications à décider.}}",
+      "undone": "Décision annulée. {left, plural, =0 {Plus rien à décider.} one {Il reste # modification à décider.} other {Il reste # modifications à décider.}}",
+      "allAccepted": "{count, plural, one {# modification acceptée.} other {# modifications acceptées.}} Plus rien à décider.",
+      "allRejected": "{count, plural, one {# modification refusée.} other {# modifications refusées.}} Plus rien à décider.",
+      "copied": "Texte copié.",
+      "listCopied": "Liste copiée."
+    }
   },
   "Errors": {
-    "invalid_request": "Ce texte ne peut pas être traité. Vérifiez sa longueur et réessayez.",
+    "invalid_request": "Rewrity n'a pas pu accepter cette demande. Vérifiez que ce que vous avez saisi respecte les limites et ne contient aucun caractère inhabituel, puis réessayez.",
     "not_configured": "Le service de réécriture n'est pas encore configuré.",
     "refused": "L'assistant a refusé de réécrire ce texte. Les tentatives refusées comptent dans la limite du jour.",
     "busy": "Le service est occupé. Réessayez dans un instant. Les tentatives échouées comptent dans la limite du jour.",
+    "provider_unavailable": "La réécriture est indisponible pour le moment. Inutile de réessayer tout de suite, revenez plus tard. Les tentatives échouées comptent dans la limite du jour.",
     "upstream_error": "L'assistant n'a pas pu répondre. Réessayez. Les tentatives échouées comptent dans la limite du jour.",
+    "no_usable_edit": "Aucune suggestion n'a passé nos contrôles : votre texte reste tel quel. Cette tentative compte dans la limite du jour.",
     "server_error": "Un problème est survenu de notre côté. Réessayez.",
     "network": "Erreur réseau. Vérifiez votre connexion et réessayez.",
     "unauthorized": "Connectez-vous pour réécrire votre texte.",
-    "quota_exceeded": "Vous avez atteint la limite du jour. Revenez demain.",
+    "quota_exceeded": "Vous avez atteint la limite du jour. Elle est réinitialisée à minuit UTC, soit 1 h du matin à Paris en hiver et 2 h en été.",
     "global_quota_exceeded": "Rewrity a atteint sa limite d'utilisation globale pour le moment. Réessayez plus tard.",
     "too_many_requests": "Une réécriture est déjà en cours. Attendez qu'elle se termine, puis réessayez.",
     "page": "Un problème est survenu pendant l'affichage de cette page.",
@@ -91,17 +208,25 @@
   },
   "Nav": {
     "home": "Réécrire",
-    "history": "Historique"
+    "history": "Historique",
+    "label": "Menu principal",
+    "skip": "Aller au contenu"
   },
   "Auth": {
     "emailLabel": "E-mail",
     "emailPlaceholder": "vous@exemple.com",
     "sendLink": "Recevoir un lien de connexion",
     "sending": "Envoi...",
-    "checkEmail": "Vérifiez votre boîte mail : le lien de connexion arrive. Ouvrez-le dans ce navigateur.",
+    "accountNote": "Il faut un compte pour réécrire un texte. En demandant un lien, vous en créez un si vous n'en avez pas encore. <privacy>Confidentialité</privacy>",
+    "checkEmail": "Vérifiez votre boîte mail : le lien de connexion est en route vers {email}. Ouvrez-le dans ce navigateur.",
+    "useAnother": "Utiliser une autre adresse",
     "signOut": "Se déconnecter",
-    "signedInAs": "Connecté : {email}",
+    "signingOut": "Déconnexion...",
+    "signedInAs": "Connecté : {email}",
+    "signOutFailed": "Impossible de vous déconnecter : ce navigateur est toujours connecté. Rechargez la page, puis réessayez.",
     "sendFailed": "Impossible d'envoyer le lien. Vérifiez l'adresse ou réessayez dans quelques minutes.",
+    "sendNeedsReload": "Impossible d'envoyer le lien. Rechargez la page, puis réessayez.",
+    "sendOffline": "Impossible d'envoyer le lien. Vérifiez votre connexion Internet, puis réessayez.",
     "callbackFailed": "Ce lien de connexion n'a pas fonctionné. Il ne marche qu'une fois, peu après son envoi, et dans le navigateur qui l'a demandé. Demandez-en un nouveau ici."
   },
   "History": {
@@ -114,15 +239,41 @@
     "loadFailed": "Impossible de charger votre historique. Rechargez la page pour réessayer.",
     "emptyHint": "Vos réécritures apparaîtront ici dès que vous en lancerez une.",
     "deleteFailed": "Impossible de supprimer cette entrée. Réessayez.",
+    "clearFailed": "Impossible de supprimer votre historique. Réessayez.",
+    "staleDelete": "Cette page n'est plus à jour : rien n'a été supprimé. Rechargez la page.",
+    "reopenFailed": "Impossible de rouvrir cette réécriture. Votre navigateur bloque peut-être le stockage de ce site.",
     "reopen": "Rouvrir",
     "search": "Rechercher dans l'historique",
     "noMatch": "Rien ne correspond à « {query} ».",
     "clear": "Tout supprimer",
-    "clearConfirm": "{count, plural, one {Supprimer cette entrée ?} other {Supprimer les # entrées ?}} Cette action est définitive.",
+    "clearConfirm": "{count, plural, one {Supprimer cette entrée ?} other {Supprimer les # entrées ?}} Cette action est définitive.",
     "clearYes": "Oui, tout supprimer",
     "clearNo": "Annuler",
+    "deleted": "Entrée supprimée.",
+    "cleared": "Votre historique a été supprimé.",
     "count": "{count, plural, one {# réécriture} other {# réécritures}}",
-    "olderHidden": "Seules vos {count} réécritures les plus récentes sont affichées, et la recherche se limite à elles."
+    "olderHidden": "Seules vos {count} réécritures les plus récentes sont affichées, et la recherche se limite à elles : chargez la suite pour atteindre les plus anciennes.",
+    "reopenRow": "Rouvrir la réécriture du {date}",
+    "deleteRow": "Supprimer la réécriture du {date}",
+    "deleteYes": "Oui, supprimer",
+    "matches": "{count, plural, =0 {Aucun résultat} one {# résultat} other {# résultats}}",
+    "loadMore": "Charger la suite",
+    "loadingMore": "Chargement...",
+    "loadMoreFailed": "Impossible de charger les réécritures plus anciennes. Réessayez."
+  },
+  "Account": {
+    "title": "Votre compte",
+    "download": "Télécharger mon historique",
+    "downloading": "Préparation...",
+    "downloaded": "{count, plural, one {# réécriture enregistrée} other {# réécritures enregistrées}} dans rewrity-history.json.",
+    "downloadFailed": "Impossible de télécharger tout votre historique : aucun fichier n'a été enregistré. Réessayez.",
+    "delete": "Supprimer mon compte",
+    "deleteConfirm": "Supprimer votre compte et tout votre historique ? Cette action est définitive. Ce qu'Anthropic a déjà reçu reste soumis à ses propres conditions.",
+    "deleteYes": "Oui, supprimer mon compte",
+    "deleteNo": "Annuler",
+    "deleting": "Suppression...",
+    "deleteFailed": "Impossible de confirmer la suppression de votre compte. Vous pouvez réessayer sans risque dans un instant : s'il a déjà été supprimé, votre session sera simplement fermée.",
+    "deleteStale": "Cette page n'est plus à jour : le compte pour lequel elle a été ouverte n'est plus connecté ici. Rien n'a été supprimé. Rechargez la page."
   },
   "Footer": {
     "privacy": "Confidentialité",
@@ -132,14 +283,14 @@
     "title": "Confidentialité",
     "intro": "Ce que ce site conserve et qui voit votre texte.",
     "dataTitle": "Ce que nous conservons",
-    "data": "Votre adresse e-mail ; pour chaque réécriture, le texte original, les modifications suggérées, la langue et la date ; et le nombre de vos tentatives par jour. Pour appliquer les limites, une trace de chaque tentative est aussi conservée au moins deux jours, puis retirée lorsqu'une tentative ultérieure, de n'importe quel compte, passe les limites. Votre extrait d'écriture n'est pas conservé. Les entrées de l'historique restent jusqu'à ce que vous les supprimiez depuis la page d'historique, qui affiche vos 50 plus récentes. Votre adresse et vos compteurs quotidiens restent jusqu'à la suppression de votre compte, que seul le responsable du site peut faire pour l'instant. Votre navigateur garde vos cookies de session et vos choix de langue et d'apparence.",
+    "data": "Votre adresse e-mail ; pour chaque réécriture, le texte original, les modifications suggérées, la langue et la date ; et le nombre de vos tentatives par jour. Pour appliquer les limites, une trace de chaque tentative est aussi conservée au moins deux jours, puis retirée lorsqu'une tentative ultérieure, de n'importe quel compte, passe les limites. Votre extrait d'écriture n'est pas conservé. Les entrées de l'historique restent jusqu'à ce que vous les supprimiez depuis la page d'historique, qui affiche vos 50 plus récentes et charge les plus anciennes à votre demande. Vous pouvez aussi y télécharger tout votre historique. Si vous cochez « Ne pas conserver ce texte dans mon historique », cette réécriture n'ajoute aucune entrée : ni le texte ni les modifications suggérées ne sont conservés, et la relecture n'existe que sur la page. La tentative compte quand même, et le texte est tout de même envoyé à Anthropic, comme indiqué plus bas. Votre adresse et vos compteurs quotidiens restent jusqu'à ce que vous supprimiez votre compte, ce que vous pouvez faire vous-même depuis la page d'historique ; votre historique disparaît alors avec lui, définitivement. Le service de connexion tient son propre journal, qui mentionne votre adresse à la création de votre compte, à chaque demande de lien de connexion, à chaque connexion et déconnexion, à chaque renouvellement automatique de votre session pendant que vous utilisez le site, et à la suppression de votre compte. Ce journal n'est pas effacé avec le compte. Votre navigateur garde vos cookies de session et vos choix de langue et d'apparence. Quand vous demandez un lien de connexion, il garde aussi une copie du texte de l'éditeur, de l'ampleur des changements choisie et, si vous l'avez cochée, de l'option de ne pas conserver le texte, pour que vous les retrouviez après la connexion. Votre extrait d'écriture n'en fait pas partie. Cette copie reste dans votre navigateur et disparaît dès que le texte est revenu dans l'éditeur, quand vous vous déconnectez, ou, passé une heure, à la prochaine ouverture de l'éditeur.",
     "accessTitle": "Qui peut les lire",
-    "access": "Les autres utilisateurs ne peuvent rien en lire. Le responsable du site le peut : votre texte est stocké tel quel, sans chiffrement qui le lui cacherait. Le site est hébergé par Vercel et les données sont stockées chez Supabase, dont le service de connexion peut aussi enregistrer votre adresse IP et votre navigateur.",
+    "access": "Les autres utilisateurs ne peuvent rien en lire. Le responsable du site le peut : votre texte est stocké tel quel, sans chiffrement qui le lui cacherait. Le site est hébergé par Vercel et les données sont stockées chez Supabase, dont le service de connexion peut aussi enregistrer votre adresse IP et votre navigateur.",
     "aiTitle": "Traitement par IA",
-    "ai": "Votre texte est envoyé à Anthropic (Claude) pour produire les suggestions, avec votre extrait d'écriture si vous en ajoutez un et jusqu'à trois extraits du corpus de style. Anthropic traite ces données selon ses propres conditions. N'envoyez pas de texte que vous n'avez pas le droit de partager.",
-    "aiWithoutExcerpts": "Votre texte est envoyé à Anthropic (Claude) pour produire les suggestions, avec votre extrait d'écriture si vous en ajoutez un. Anthropic traite ces données selon ses propres conditions. N'envoyez pas de texte que vous n'avez pas le droit de partager.",
+    "ai": "Votre texte est envoyé à Anthropic (Claude) pour produire les suggestions, avec votre extrait d'écriture si vous en ajoutez un et jusqu'à trois extraits du corpus de style. Anthropic traite ces données selon ses propres conditions. N'envoyez pas de texte que vous n'avez pas le droit de partager. La vérification gratuite se fait dans votre navigateur et n'envoie rien.",
+    "aiWithoutExcerpts": "Votre texte est envoyé à Anthropic (Claude) pour produire les suggestions, avec votre extrait d'écriture si vous en ajoutez un. Anthropic traite ces données selon ses propres conditions. N'envoyez pas de texte que vous n'avez pas le droit de partager. La vérification gratuite se fait dans votre navigateur et n'envoie rien.",
     "limitsTitle": "Limites",
-    "limits": "Les suggestions sont des corrections de style. Elles ne changent pas l'auteur d'un texte, et cet outil ne détecte pas les textes écrits par une IA."
+    "limits": "Les suggestions sont des modifications de style. Elles ne changent pas l'auteur d'un texte, et cet outil ne détecte pas les textes écrits par une IA."
   },
   "Theme": {
     "label": "Apparence",

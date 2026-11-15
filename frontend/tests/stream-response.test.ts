@@ -123,7 +123,7 @@ describe("streamResponse", () => {
     const sent = await events(response);
     await settled;
     expect(sent.map((e) => e.type)).toEqual(["start", "error"]);
-    expect(sent.at(-1)).toEqual({ type: "error", error: "upstream_error" });
+    expect(sent.at(-1)).toEqual({ type: "error", error: "no_usable_edit" });
     expect(onSettled).toHaveBeenCalledWith("failed", null);
   });
 

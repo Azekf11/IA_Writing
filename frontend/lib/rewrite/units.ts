@@ -133,6 +133,11 @@ const unitOf = (word: string) => {
 export const readsAsUnit = (word: string) =>
   SCALES.has(word.toLowerCase()) || unitOf(word) !== undefined;
 
+// Whether what stands from start to end touches a figure, across a space or a hyphen at most
+export const touchesFigure = (text: string, start: number, end: number) =>
+  /\d[\s\p{Pd}]?$/u.test(text.slice(Math.max(0, start - 2), start)) ||
+  /^\s?\d/.test(text.slice(end, end + 2));
+
 // A symbol or a three-letter code just before a figure: "$5", "€ 5", "USD 5"
 const BEFORE = /(\p{Sc}|(?<![\p{L}\p{N}])\p{L}{3})\s?$/u;
 // The word just after it, across spaces and at most one line break or after one hyphen: "5 km", "5-km",
@@ -292,4 +297,39 @@ export function sameUnits(a: string, b: string): boolean {
     }
     return true;
   });
+}
+
+// What a figure is said to reach, by the words that touch it: "at least 40", "moins de 5 %". Only words with
+// a direction: "about" and "environ" have none. A denial in front turns one around, so "no more than 40" says
+// what "at most 40" says, and "pas moins de 40" what "au moins 40" says.
+const LOWER_BOUND = String.raw`at\s+least\s|more\s+than\s|over\s|above\s|au\s+moins\s|plus\s+d(?:e\s|['’])`;
+const UPPER_BOUND = String.raw`at\s+most\s|fewer\s+than\s|less\s+than\s|under\s|below\s|up\s+to\s|au\s+plus\s|moins\s+d(?:e\s|['’])|jusqu['’]à\s`;
+const BOUND = new RegExp(
+  String.raw`(?<![\p{L}\p{N}\p{M}-])(?:(no|not|nothing|pas)\s+)?(?:(${LOWER_BOUND})|${UPPER_BOUND})\s*(?:\p{Sc}\s*)?`,
+  "giu",
+);
+
+function boundsOf(text: string): Map<string, string[]> {
+  const valueAt = new Map(
+    figuresIn(text).map(({ start, value }) => [start, value]),
+  );
+  const bounds = new Map<string, string[]>();
+  for (const match of text.matchAll(BOUND)) {
+    const value = valueAt.get(match.index + match[0].length);
+    if (value === undefined) continue;
+    const lower = Boolean(match[2]) !== Boolean(match[1]);
+    const list = bounds.get(value) ?? [];
+    list.push(lower ? "lower" : "upper");
+    bounds.set(value, list);
+  }
+  return bounds;
+}
+
+// Whether each figure kept its direction, for two texts that read the same figures. As with a unit, a bound
+// can go or come, since "at least 40" and "40" do not contradict each other, but it cannot turn into the other.
+export function sameBounds(a: string, b: string): boolean {
+  const after = boundsOf(b);
+  return Array.from(boundsOf(a)).every(([value, bounds]) =>
+    sameUnitsOf(bounds, after.get(value) ?? []),
+  );
 }

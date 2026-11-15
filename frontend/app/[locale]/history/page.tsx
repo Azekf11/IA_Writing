@@ -4,8 +4,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import { HistoryContent } from "@/components/history-content";
-import { SiteFooter } from "@/components/site-footer";
-import { SiteHeader } from "@/components/site-header";
+import { HistorySkeleton } from "@/components/history-skeleton";
 import { routing } from "@/i18n/routing";
 import { alternatesFor } from "@/lib/site";
 
@@ -29,15 +28,13 @@ export default async function HistoryPage({
   const t = await getTranslations("History");
 
   return (
-    <main className="mx-auto flex w-full max-w-4xl flex-col gap-8 px-6 py-8">
-      <SiteHeader />
+    <div className="flex flex-col gap-8">
       <h1 className="font-serif text-3xl font-medium tracking-tight">
         {t("title")}
       </h1>
-      <Suspense>
+      <Suspense fallback={<HistorySkeleton />}>
         <HistoryContent />
       </Suspense>
-      <SiteFooter />
-    </main>
+    </div>
   );
 }

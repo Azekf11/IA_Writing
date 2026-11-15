@@ -47,21 +47,45 @@ describe("reopen", () => {
     expect(readReopen()).toBeNull();
   });
 
+  // Each of the next ones quotes the text as slice() reads it, so only the check named can refuse it
   it("refuses an edit running past the end of the text", () => {
-    stashReopen("short", [{ ...EDIT, start: 2, end: 99 }]);
+    stashReopen("short", [{ ...EDIT, original: "ort", start: 2, end: 99 }]);
+    expect(readReopen()).toBeNull();
+  });
+
+  it("refuses an edit starting before the text", () => {
+    stashReopen(TEXT, [{ ...EDIT, start: -19, end: 13 }]);
+    expect(readReopen()).toBeNull();
+  });
+
+  it("refuses an edit that covers nothing", () => {
+    stashReopen(TEXT, [{ ...EDIT, original: "", start: 6, end: 6 }]);
     expect(readReopen()).toBeNull();
   });
 
   it("refuses malformed data", () => {
+    // Fresh, so that their age is not what refuses them
+    const stamp = Date.now();
     for (const bad of [
       "not json",
-      "{}",
-      JSON.stringify({ text: 5, edits: [] }),
-      JSON.stringify({ text: TEXT, edits: [{ id: 1 }] }),
+      JSON.stringify({ stamp }),
+      JSON.stringify({ text: 5, edits: [], stamp }),
+      JSON.stringify({ text: TEXT, edits: [{ id: 1 }], stamp }),
     ]) {
       sessionStorage.setItem("rewrity:reopen", bad);
       expect(readReopen()).toBeNull();
     }
+  });
+
+  it("says whether the rewrite could be stashed", () => {
+    expect(stashReopen(TEXT, [EDIT])).toBe(true);
+    const blocked = vi
+      .spyOn(Storage.prototype, "setItem")
+      .mockImplementation(() => {
+        throw new Error("blocked");
+      });
+    expect(stashReopen(TEXT, [EDIT])).toBe(false);
+    blocked.mockRestore();
   });
 
   it("accepts a rewrite without edits", () => {

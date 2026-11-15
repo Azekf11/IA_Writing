@@ -1,22 +1,24 @@
 "use client";
 
+import { ChevronDown } from "lucide-react";
 import { useTranslations } from "next-intl";
-import { useId } from "react";
-import { useTypedEarly } from "@/components/use-typed-early";
-import { cn } from "@/lib/cn";
-import {
-  MAX_VOICE_CHARS,
-  STRENGTHS,
-  type Strength,
-} from "@/lib/rewrite/schema";
+import { useId, type Dispatch, type SetStateAction } from "react";
+import { SegmentedControl } from "@/components/segmented-control";
+import { useTickedEarly, useTypedEarly } from "@/components/use-typed-early";
+import { MAX_VOICE_CHARS, STRENGTHS, type Strength } from "@/lib/text";
 
-export type Options = { strength: Strength; voice: string };
+export type Options = {
+  strength: Strength;
+  voice: string;
+  // False leaves the rewrite out of the history. Keeping it is the default, and says nothing
+  keep?: false;
+};
 
 export const DEFAULT_OPTIONS: Options = { strength: "standard", voice: "" };
 
 type Props = {
   value: Options;
-  onChange: (value: Options) => void;
+  onChange: Dispatch<SetStateAction<Options>>;
   disabled?: boolean;
 };
 
@@ -24,16 +26,34 @@ type Props = {
 export function RewriteOptions({ value, onChange, disabled }: Props) {
   const t = useTranslations("Editor");
   const voiceId = useId();
-  const onVoice = (voice: string) => onChange({ ...value, voice });
+  const voiceHint = useId();
+  const strengthHint = useId();
+  const dontKeepHint = useId();
+  // Each changes its own field: both can report at once, when the scripts arrive
+  const onVoice = (voice: string) =>
+    onChange((current) => ({ ...current, voice }));
   const voiceBox = useTypedEarly<HTMLTextAreaElement>(value.voice, onVoice);
+  const onDontKeep = (dontKeep: boolean) =>
+    onChange((current) => ({
+      ...current,
+      keep: dontKeep ? false : undefined,
+    }));
+  const dontKeepBox = useTickedEarly(value.keep === false, onDontKeep);
 
   return (
     <details className="group rounded-lg border border-border bg-background">
-      <summary className="flex cursor-pointer list-none items-center justify-between gap-3 rounded-lg px-4 py-2.5 text-sm font-medium text-muted transition-colors hover:text-foreground">
+      <summary className="flex cursor-pointer list-none items-center justify-between gap-3 rounded-lg px-4 py-2.5 text-sm font-medium text-muted transition-colors hover:text-foreground [&::-webkit-details-marker]:hidden">
         <span>{t("options")}</span>
-        <span className="text-xs">
-          {t(`strengths.${value.strength}`)}
-          {value.voice.trim() ? ` · ${t("voice").split(" (")[0]}` : ""}
+        <span className="flex items-center gap-2 text-xs">
+          <span>
+            {t(`strengths.${value.strength}`)}
+            {value.voice.trim() ? ` · ${t("voiceShort")}` : ""}
+            {value.keep === false ? ` · ${t("dontKeepShort")}` : ""}
+          </span>
+          <ChevronDown
+            className="size-4 shrink-0 group-open:rotate-180 motion-safe:transition-transform"
+            aria-hidden
+          />
         </span>
       </summary>
 
@@ -42,37 +62,30 @@ export function RewriteOptions({ value, onChange, disabled }: Props) {
           <legend className="mb-1 text-sm font-semibold">
             {t("strength")}
           </legend>
-          <div
-            role="radiogroup"
-            aria-label={t("strength")}
-            className="flex flex-wrap gap-1 rounded-lg bg-surface-2 p-1"
-          >
-            {STRENGTHS.map((strength) => {
-              const active = value.strength === strength;
-              return (
-                <button
-                  key={strength}
-                  type="button"
-                  role="radio"
-                  aria-checked={active}
-                  onClick={() => onChange({ ...value, strength })}
-                  className={cn(
-                    // One word on one line, on a phone too: the rule for long links is not for these.
-                    // Equal widths for as long as they fit, then the row wraps.
-                    "flex-1 rounded-md px-2 py-1.5 text-sm font-medium transition-colors [overflow-wrap:normal] max-sm:px-0.5",
-                    active
-                      ? "bg-surface text-foreground shadow-sm"
-                      : "text-muted hover:text-foreground",
-                  )}
-                >
-                  {t(`strengths.${strength}`)}
-                </button>
-              );
-            })}
-          </div>
+          <SegmentedControl
+            label={t("strength")}
+            value={value.strength}
+            onChange={(strength) => onChange({ ...value, strength })}
+            className="flex flex-wrap"
+            segments={STRENGTHS.map((strength) => ({
+              value: strength,
+              content: t(`strengths.${strength}`),
+              describedBy: `${strengthHint}-${strength}`,
+              // One word on one line, on a phone too: the rule for long links is not for these.
+              // Equal widths for as long as they fit, then the row wraps.
+              className: "flex-1 text-sm [overflow-wrap:normal] max-sm:px-0.5",
+            }))}
+          />
           <p className="text-xs text-muted">
             {t(`strengthHint.${value.strength}`)}
           </p>
+          {/* Each segment's own hint, for a screen reader that reaches one without choosing it.
+              Hidden, they are not read a second time with the page. */}
+          {STRENGTHS.map((strength) => (
+            <span key={strength} id={`${strengthHint}-${strength}`} hidden>
+              {t(`strengthHint.${strength}`)}
+            </span>
+          ))}
         </fieldset>
 
         <div className="flex flex-col gap-1.5">
@@ -87,10 +100,14 @@ export function RewriteOptions({ value, onChange, disabled }: Props) {
             maxLength={MAX_VOICE_CHARS}
             rows={3}
             onChange={(event) => onVoice(event.target.value)}
+            aria-describedby={voiceHint}
             placeholder={t("voicePlaceholder")}
-            className="w-full resize-y rounded-lg border border-border bg-surface p-3 text-sm leading-relaxed transition-colors placeholder:text-muted/70 focus:border-accent"
+            className="w-full resize-y rounded-lg border border-border bg-surface p-3 text-sm leading-relaxed transition-colors placeholder:text-muted focus:border-accent max-sm:text-base"
           />
-          <p className="flex justify-between gap-3 text-xs text-muted">
+          <p
+            id={voiceHint}
+            className="flex justify-between gap-3 text-xs text-muted"
+          >
             <span>{t("voiceHint")}</span>
             <span className="shrink-0">
               {t("voiceCount", {
@@ -98,6 +115,28 @@ export function RewriteOptions({ value, onChange, disabled }: Props) {
                 max: MAX_VOICE_CHARS,
               })}
             </span>
+          </p>
+        </div>
+
+        <div className="flex flex-col gap-1.5">
+          <label className="flex items-start gap-2 text-sm font-semibold">
+            <input
+              ref={dontKeepBox}
+              type="checkbox"
+              checked={value.keep === false}
+              disabled={disabled}
+              onChange={(event) => onDontKeep(event.target.checked)}
+              // Inside the form, Enter would send the text with the box still unticked
+              onKeyDown={(event) => {
+                if (event.key === "Enter") event.preventDefault();
+              }}
+              aria-describedby={dontKeepHint}
+              className="mt-0.5 size-4 shrink-0 accent-accent max-sm:size-6"
+            />
+            {t("dontKeep")}
+          </label>
+          <p id={dontKeepHint} className="text-xs text-muted">
+            {t("dontKeepHint")}
           </p>
         </div>
       </div>

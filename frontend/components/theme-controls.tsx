@@ -4,6 +4,7 @@ import { Check, Monitor, Moon, Palette, Sun } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useTheme } from "next-themes";
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { SegmentedControl } from "@/components/segmented-control";
 import { ACCENTS, type Accent } from "@/lib/accent";
 import {
   getAccent,
@@ -11,7 +12,6 @@ import {
   setAccent,
   subscribeAccent,
 } from "@/lib/accent-store";
-import { cn } from "@/lib/cn";
 
 const THEMES = [
   { value: "light", icon: Sun },
@@ -47,6 +47,7 @@ export function ThemeControls() {
     getServerAccent,
   );
   const root = useRef<HTMLDivElement>(null);
+  const trigger = useRef<HTMLButtonElement>(null);
 
   // Close on outside click and on Escape
   useEffect(() => {
@@ -55,7 +56,11 @@ export function ThemeControls() {
       if (!root.current?.contains(event.target as Node)) setOpen(false);
     };
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setOpen(false);
+      if (event.key !== "Escape") return;
+      // The control that held the focus goes with the panel: the focus would fall to the page
+      if (root.current?.contains(document.activeElement))
+        trigger.current?.focus();
+      setOpen(false);
     };
     document.addEventListener("mousedown", onClick);
     document.addEventListener("keydown", onKey);
@@ -68,6 +73,7 @@ export function ThemeControls() {
   return (
     <div ref={root} className="relative">
       <button
+        ref={trigger}
         type="button"
         aria-label={t("label")}
         aria-expanded={open}
@@ -88,61 +94,41 @@ export function ThemeControls() {
           <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted">
             {t("mode")}
           </p>
-          <div
-            role="radiogroup"
-            aria-label={t("mode")}
-            className="grid grid-cols-3 gap-1 rounded-lg bg-surface-2 p-1"
-          >
-            {THEMES.map(({ value, icon: Icon }) => {
-              const active = mounted && theme === value;
-              return (
-                <button
-                  key={value}
-                  type="button"
-                  role="radio"
-                  aria-checked={active}
-                  onClick={() => setTheme(value)}
-                  className={cn(
-                    "flex items-center justify-center gap-1.5 rounded-md px-2 py-1.5 text-xs font-medium transition-colors",
-                    active
-                      ? "bg-surface text-foreground shadow-sm"
-                      : "text-muted hover:text-foreground",
-                  )}
-                >
+          <SegmentedControl
+            label={t("mode")}
+            value={mounted ? theme : undefined}
+            onChange={setTheme}
+            className="grid grid-cols-3"
+            segments={THEMES.map(({ value, icon: Icon }) => ({
+              value,
+              content: (
+                <>
                   <Icon className="size-3.5" aria-hidden />
                   {t(value)}
-                </button>
-              );
-            })}
-          </div>
+                </>
+              ),
+              className: "flex items-center justify-center gap-1.5 text-xs",
+            }))}
+          />
 
           <p className="mb-2 mt-4 text-xs font-medium uppercase tracking-wide text-muted">
             {t("accent")}
           </p>
-          <div
-            role="radiogroup"
-            aria-label={t("accent")}
-            className="flex gap-2"
-          >
-            {ACCENTS.map((name) => (
-              <button
-                key={name}
-                type="button"
-                role="radio"
-                aria-checked={accent === name}
-                aria-label={t(`accents.${name}`)}
-                onClick={() => setAccent(name)}
-                className={cn(
-                  "grid size-8 place-items-center rounded-full text-white transition-transform hover:scale-110",
-                  SWATCH[name],
-                  accent === name &&
-                    "ring-2 ring-foreground ring-offset-2 ring-offset-surface",
-                )}
-              >
-                {accent === name && <Check className="size-4" aria-hidden />}
-              </button>
-            ))}
-          </div>
+          <SegmentedControl
+            label={t("accent")}
+            look="swatches"
+            value={accent}
+            onChange={setAccent}
+            className="flex"
+            segments={ACCENTS.map((name) => ({
+              value: name,
+              label: t(`accents.${name}`),
+              content: accent === name && (
+                <Check className="size-4" aria-hidden />
+              ),
+              className: SWATCH[name],
+            }))}
+          />
         </div>
       )}
     </div>

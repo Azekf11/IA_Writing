@@ -61,6 +61,19 @@ describe("fetchEdits", () => {
     });
   });
 
+  it("says not to keep the rewrite only when asked to", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockImplementation(async () =>
+        streamOf(wire([{ type: "start", references: [] }, done])),
+      );
+    vi.stubGlobal("fetch", fetchMock);
+    await fetchEdits({ ...input, keep: false });
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body).keep).toBe(false);
+    await fetchEdits(input);
+    expect(fetchMock.mock.calls[1][1].body).not.toContain("keep");
+  });
+
   it("reports each edit as it arrives, then returns them all", async () => {
     const events: StreamEvent[] = [
       { type: "start", references: [{ author: "A", title: "T" }] },
@@ -218,6 +231,43 @@ describe("fetchEdits", () => {
     });
   });
 
+  it("knows the code for a service that turned the request down", async () => {
+    stub(
+      new Response(JSON.stringify({ error: "provider_unavailable" }), {
+        status: 503,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+    await expect(fetchEdits(input)).rejects.toMatchObject({
+      code: "provider_unavailable",
+    });
+    stub(
+      streamOf(
+        wire([
+          { type: "start", references: [] },
+          { type: "error", error: "provider_unavailable" },
+        ]),
+      ),
+    );
+    await expect(fetchEdits(input)).rejects.toMatchObject({
+      code: "provider_unavailable",
+    });
+  });
+
+  it("knows the code for an answer whose every edit failed a check", async () => {
+    stub(
+      streamOf(
+        wire([
+          { type: "start", references: [] },
+          { type: "error", error: "no_usable_edit" },
+        ]),
+      ),
+    );
+    await expect(fetchEdits(input)).rejects.toMatchObject({
+      code: "no_usable_edit",
+    });
+  });
+
   it("still reads a classic JSON answer", async () => {
     stub(
       new Response(JSON.stringify({ edits: [edit(0)], references: [] }), {
@@ -238,8 +288,23 @@ describe("fetchEdits", () => {
     });
   });
 
-  it("falls back to a generic code for an unreadable error", async () => {
-    stub(new Response("<html>", { status: 502 }));
+  // A page from the platform can come before any attempt was taken
+  it("does not say an attempt counted when the answer is not the route's JSON", async () => {
+    for (const status of [200, 500, 502, 504]) {
+      stub(new Response("<html>", { status }));
+      await expect(fetchEdits(input)).rejects.toMatchObject({
+        code: "server_error",
+      });
+    }
+  });
+
+  it("falls back to a generic code for a code it does not know", async () => {
+    stub(
+      new Response(JSON.stringify({ error: "something_new" }), {
+        status: 500,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
     await expect(fetchEdits(input)).rejects.toMatchObject({
       code: "upstream_error",
     });

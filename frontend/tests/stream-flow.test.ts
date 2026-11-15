@@ -1,6 +1,7 @@
 // @vitest-environment node
 import { createServer, type Server, type ServerResponse } from "node:http";
 import type { AddressInfo } from "node:net";
+import { format } from "node:util";
 import {
   afterAll,
   afterEach,
@@ -11,7 +12,7 @@ import {
   it,
   vi,
 } from "vitest";
-import type { AttemptReport } from "@/lib/rewrite/diagnostics";
+import { logAttempt, type AttemptReport } from "@/lib/rewrite/diagnostics";
 import { EventReader, type StreamEvent } from "@/lib/rewrite/protocol";
 import { streamResponse } from "@/lib/rewrite/stream-response";
 import { closing, event, opening, piece, sse } from "./anthropic-sse";
@@ -273,6 +274,235 @@ describe("a call that does not end well, through the real SDK", () => {
     await settled;
     expect(sent.at(-1)).toEqual({ type: "error", error: "busy" });
     expect(requests).toBe(1);
+  });
+});
+
+// The HTTP answer of a service that will not take the call
+const turningDown =
+  (status: number, type: string, message = "x") =>
+  (response: ServerResponse) => {
+    response.writeHead(status, { "content-type": "application/json" });
+    response.end(JSON.stringify({ type: "error", error: { type, message } }));
+  };
+
+describe("a call the service turns down, through the real SDK", () => {
+  it.each([
+    [400, "invalid_request_error", ["Anthropic API error", 400]],
+    [402, "billing_error", ["Anthropic API error", 402]],
+    [404, "not_found_error", ["Anthropic API error", 404]],
+    [401, "authentication_error", ["Anthropic credentials rejected"]],
+    [403, "permission_error", ["Anthropic credentials rejected"]],
+  ])(
+    "reports a %i as unavailable and counted, once, with its log line",
+    async (status, type, logged) => {
+      answer = turningDown(status, type);
+      const { response, settled, onSettled } = run();
+      const sent = await eventsOf(response);
+      await settled;
+      expect(typesOf(sent)).toEqual(["start", "error"]);
+      expect(sent.at(-1)).toEqual({
+        type: "error",
+        error: "provider_unavailable",
+      });
+      expect(onSettled).toHaveBeenCalledWith("failed", null);
+      expect(console.error).toHaveBeenCalledWith(...logged);
+      expect(requests).toBe(1);
+    },
+  );
+
+  it("reports a 429 as busy, counted and with no failure logged", async () => {
+    answer = turningDown(429, "rate_limit_error");
+    const { response, settled, onSettled } = run();
+    const sent = await eventsOf(response);
+    await settled;
+    expect(sent.at(-1)).toEqual({ type: "error", error: "busy" });
+    expect(onSettled).toHaveBeenCalledWith("failed", null);
+    expect(console.error).not.toHaveBeenCalled();
+  });
+
+  it.each([409, 413, 422, 500, 503])(
+    "leaves a %i as upstream_error",
+    async (status) => {
+      answer = turningDown(status, "api_error");
+      const { response, settled } = run();
+      const sent = await eventsOf(response);
+      await settled;
+      expect(sent.at(-1)).toEqual({ type: "error", error: "upstream_error" });
+      expect(console.error).toHaveBeenCalledWith("Anthropic API error", status);
+    },
+  );
+});
+
+describe("the attempt's log line, through the real SDK", () => {
+  // Runs one attempt the way the route does, and returns the line it leaves
+  async function attemptLine(signal = new AbortController().signal) {
+    const report: AttemptReport = {};
+    const { response, settled } = streamResponse({
+      text: TEXT,
+      references: [],
+      options: {},
+      signal,
+      prepMs: 1,
+      report,
+      onSettled: async (outcome) => logAttempt(outcome, report),
+    });
+    await eventsOf(response);
+    await settled;
+    const [, line] = vi.mocked(console.info).mock.calls.at(-1) as string[];
+    return JSON.parse(line);
+  }
+
+  const everythingPrinted = () =>
+    [
+      ...vi.mocked(console.error).mock.calls,
+      ...vi.mocked(console.info).mock.calls,
+    ]
+      .map((args) => format(...args))
+      .join("\n");
+
+  const CANARY = "CANARY quoting the writer's text";
+
+  it.each([
+    [
+      "no credit",
+      400,
+      "invalid_request_error",
+      `Your credit balance is too low to access the API. ${CANARY}`,
+      "provider_unavailable",
+      "credit",
+    ],
+    [
+      "the spend limit",
+      400,
+      "invalid_request_error",
+      `You have reached your specified API usage limits. ${CANARY}`,
+      "provider_unavailable",
+      "spend_limit",
+    ],
+    [
+      "any other bad request",
+      400,
+      "invalid_request_error",
+      `messages: too many ${CANARY}`,
+      "provider_unavailable",
+      "other",
+    ],
+    [
+      "a billing refusal",
+      402,
+      "billing_error",
+      CANARY,
+      "provider_unavailable",
+      "other",
+    ],
+    [
+      "a rejected key",
+      401,
+      "authentication_error",
+      CANARY,
+      "provider_unavailable",
+      "other",
+    ],
+    ["a rate limit", 429, "rate_limit_error", CANARY, "busy", "other"],
+    ["an overload", 529, "overloaded_error", CANARY, "busy", "other"],
+    ["a fault", 500, "api_error", CANARY, "upstream_error", "other"],
+  ])(
+    "tells %s from the rest, in codes and numbers only",
+    async (_case, status, type, message, code, cause) => {
+      answer = turningDown(status, type, message);
+      expect(await attemptLine()).toMatchObject({
+        state: "failed",
+        error_code: code,
+        provider_status: status,
+        provider_error: type,
+        provider_cause: cause,
+      });
+      expect(everythingPrinted()).not.toContain("CANARY");
+    },
+  );
+
+  it("reports an error type the API does not list as other", async () => {
+    answer = turningDown(400, "CANARY_made_up");
+    expect((await attemptLine()).provider_error).toBe("other");
+    expect(everythingPrinted()).not.toContain("CANARY");
+  });
+
+  it("reports an overload sent inside the stream, which has no status", async () => {
+    answer = (response) => {
+      streaming(response);
+      response.end(
+        opening() +
+          event("error", {
+            error: { type: "overloaded_error", message: CANARY },
+          }),
+      );
+    };
+    const logged = await attemptLine();
+    expect(logged).toMatchObject({
+      state: "failed",
+      error_code: "busy",
+      provider_error: "overloaded_error",
+    });
+    expect(logged).not.toHaveProperty("provider_status");
+    expect(everythingPrinted()).not.toContain("CANARY");
+  });
+
+  const expectOnlyTheCode = (logged: object) => {
+    expect(logged).toMatchObject({
+      state: "failed",
+      error_code: "upstream_error",
+    });
+    expect(logged).not.toHaveProperty("provider_status");
+    expect(logged).not.toHaveProperty("provider_error");
+    expect(logged).not.toHaveProperty("provider_cause");
+  };
+
+  it("has only the code when the connection fails before any answer", async () => {
+    answer = (response) => response.destroy();
+    expectOnlyTheCode(await attemptLine());
+    expect(console.error).toHaveBeenCalledWith(
+      "Anthropic connection failed",
+      expect.any(String),
+    );
+  });
+
+  it("has only the code when a stream dies partway", async () => {
+    answer = (response) => {
+      streaming(response);
+      response.write(opening(), () => response.destroy());
+    };
+    expectOnlyTheCode(await attemptLine());
+  });
+
+  it("has only the code when the deadline ended the call", async () => {
+    // attemptLine says 1 ms went by before the model
+    shortenDeadline(150, 49_999);
+    answer = (response) => {
+      streaming(response);
+      response.write(opening());
+    };
+    expectOnlyTheCode(await attemptLine());
+  });
+
+  it("has no failure on it when the reader left", async () => {
+    answer = (response) => {
+      streaming(response);
+      response.write(opening(), () => controller.abort());
+    };
+    const controller = new AbortController();
+    const logged = await attemptLine(controller.signal);
+    expect(logged.state).toBe("cancelled");
+    expect(logged).not.toHaveProperty("error_code");
+  });
+
+  it("has no failure on it when the answer was complete", async () => {
+    answer = (response) => {
+      streaming(response);
+      response.end(sse([WHOLE], "end_turn"));
+    };
+    const logged = await attemptLine();
+    expect(logged.state).toBe("succeeded");
+    expect(logged).not.toHaveProperty("error_code");
   });
 });
 

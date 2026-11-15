@@ -6,7 +6,7 @@ Usage (from corpus-pipeline/), after export_embedder.py:
 frontend/tests/embedder.test.ts embeds the same texts in TypeScript and fails when a value
 differs by 1e-4 or more. That keeps the query vectors (TypeScript, per request) and the stored
 corpus vectors (Python, ingest_style.py) in the same space, as long as this file is regenerated
-after any change to embed.py: no check does that.
+after any change to embed.py: tests/test_style_embed.py fails until it is.
 """
 
 from __future__ import annotations

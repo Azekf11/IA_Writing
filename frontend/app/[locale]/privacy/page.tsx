@@ -2,8 +2,6 @@ import { hasLocale } from "next-intl";
 import { getTranslations, setRequestLocale } from "next-intl/server";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { SiteFooter } from "@/components/site-footer";
-import { SiteHeader } from "@/components/site-header";
 import { routing } from "@/i18n/routing";
 import { alternatesFor } from "@/lib/site";
 import { referencesEnabled } from "@/lib/style/switch";
@@ -30,8 +28,7 @@ export default async function PrivacyPage({
   const t = await getTranslations("Privacy");
 
   return (
-    <main className="mx-auto flex w-full max-w-4xl flex-col gap-8 px-6 py-8">
-      <SiteHeader />
+    <div className="flex flex-col gap-8">
       <div className="flex flex-col gap-2">
         <h1 className="font-serif text-3xl font-medium tracking-tight">
           {t("title")}
@@ -53,7 +50,6 @@ export default async function PrivacyPage({
           </p>
         </section>
       ))}
-      <SiteFooter />
-    </main>
+    </div>
   );
 }

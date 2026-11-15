@@ -43,7 +43,7 @@ export async function run(t) {
           .waitFor({ timeout: 8000 });
         const first = Date.now() - started;
         await page
-          .getByRole("button", { name: "Edit the text" })
+          .getByRole("button", { name: "Back to the original text" })
           .waitFor({ timeout: 10000 });
         const last = Date.now() - started;
         mock.state.gapMs = 350;
@@ -59,7 +59,9 @@ export async function run(t) {
       "streaming",
       "while it writes: counter grows, bulk buttons wait, Stop is offered",
       async () => {
-        await page.getByRole("button", { name: "Edit the text" }).click();
+        await page
+          .getByRole("button", { name: "Back to the original text" })
+          .click();
         mock.state.gapMs = 1200;
         await page.getByRole("button", { name: "Rewrite" }).click();
         await page
@@ -72,7 +74,7 @@ export async function run(t) {
         await page.getByText("1 edit so far").waitFor();
         await page.getByText("2 edits so far").waitFor({ timeout: 8000 });
         await page
-          .getByRole("button", { name: "Edit the text" })
+          .getByRole("button", { name: "Back to the original text" })
           .waitFor({ timeout: 15000 });
         expect(
           await page.getByRole("button", { name: "Accept all" }).isEnabled(),
@@ -86,7 +88,9 @@ export async function run(t) {
       "streaming",
       "a decision made early survives the edits that arrive after it",
       async () => {
-        await page.getByRole("button", { name: "Edit the text" }).click();
+        await page
+          .getByRole("button", { name: "Back to the original text" })
+          .click();
         mock.state.gapMs = 1200;
         await page.getByRole("button", { name: "Rewrite" }).click();
         await page
@@ -97,9 +101,9 @@ export async function run(t) {
           .first()
           .click();
         await page
-          .getByRole("button", { name: "Edit the text" })
+          .getByRole("button", { name: "Back to the original text" })
           .waitFor({ timeout: 15000 });
-        await page.getByText(/^1 of \d+ accepted/).waitFor();
+        await page.getByText(/^1 accepted, 0 rejected/).waitFor();
         mock.state.gapMs = 350;
       },
     );
@@ -108,7 +112,9 @@ export async function run(t) {
       "streaming",
       "Stop keeps what arrived and the request still counts",
       async () => {
-        await page.getByRole("button", { name: "Edit the text" }).click();
+        await page
+          .getByRole("button", { name: "Back to the original text" })
+          .click();
         mock.state.gapMs = 1500;
         await page.getByRole("button", { name: "Rewrite" }).click();
         await page

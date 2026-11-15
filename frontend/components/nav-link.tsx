@@ -2,7 +2,7 @@
 
 import type { ComponentProps } from "react";
 import { Link, usePathname } from "@/i18n/navigation";
-import { cn } from "@/lib/cn";
+import { CHOSEN_IN_FORCED_COLORS, cn } from "@/lib/cn";
 
 // A navigation link that shows when its page is the current one
 export function NavLink({
@@ -20,7 +20,7 @@ export function NavLink({
       className={cn(
         "rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
         active
-          ? "bg-accent-soft text-accent-text"
+          ? `bg-accent-soft text-accent-text ${CHOSEN_IN_FORCED_COLORS}`
           : "text-muted hover:text-foreground",
         className,
       )}

@@ -6,12 +6,17 @@
 import assert from "node:assert/strict";
 import { after, before, describe, it } from "node:test";
 import {
+  clearOfMidnight,
   client,
   createUser,
   deleteUser,
+  FILE_MARGIN_MS,
+  globalToday,
   localStack,
   psql,
   rpc,
+  saveScene,
+  setLimits,
   sqlState,
 } from "./support.mjs";
 
@@ -44,6 +49,13 @@ const reserve = (user) =>
     body: { account: user.id },
   });
 
+// What the route does next, before the model: from here the attempt counts for all accounts
+const start = (user, ticket) =>
+  api.service("/rest/v1/rpc/start_rewrite", {
+    method: "POST",
+    body: { account: user.id, reservation: ticket },
+  });
+
 // A refusal from the database itself, not a missing route
 const denied = (response) => {
   assert.ok([401, 403].includes(response.status), `status ${response.status}`);
@@ -56,6 +68,10 @@ const directAccessClosed = () =>
   psql(
     "select count(*) from supabase_migrations.schema_migrations where version = '20261107000000'",
   )[0] === "1";
+
+// On one UTC day, as in quota.test.mjs: a test reads the day's global count before and after a
+// deletion, and puts it back
+before(() => clearOfMidnight(FILE_MARGIN_MS));
 
 before(async () => {
   a = await createUser(api, "rls-a");
@@ -165,9 +181,9 @@ describe("history: each user sees and changes only their own rows", () => {
       original: "someone else's",
       locale: "en",
     });
-    denied(await history(null, "?id=not.is.null", { method: "DELETE" }));
+    denied(await history(null, `?user_id=eq.${a.id}`, { method: "DELETE" }));
 
-    const gone = await history(a, "?id=not.is.null", {
+    const gone = await history(a, `?user_id=eq.${a.id}`, {
       method: "DELETE",
       prefer: "return=representation",
     });
@@ -179,21 +195,96 @@ describe("history: each user sees and changes only their own rows", () => {
     await history(b, `?id=eq.${other.body[0].id}`, { method: "DELETE" });
   });
 
-  it("removes a user's history and counters with their account", async () => {
-    const c = await createUser(api, "rls-cascade");
-    await save({ user_id: c.id, original: "keep", locale: "en" });
-    assert.equal((await reserve(c)).status, 200);
-    await deleteUser(api, c);
-    for (const table of ["rewrites", "usage", "quota_reservations"]) {
-      const left = await api.service(
-        `/rest/v1/${table}?user_id=eq.${c.id}&select=user_id`,
-      );
-      assert.deepEqual(
-        left.body,
-        [],
-        `${table} still holds rows of a deleted user`,
-      );
+  // A tab left open on one account while the cookie now holds another's session: the page names
+  // the account it shows, so the request matches nothing. It used to empty the other history.
+  it("deletes nothing when the session is no longer the account the page names", async () => {
+    const own = await save({
+      user_id: a.id,
+      original: "a's",
+      locale: "en",
+    });
+    const theirs = await save({
+      user_id: b.id,
+      original: "b's",
+      locale: "en",
+    });
+
+    for (const filter of [
+      `?user_id=eq.${b.id}`,
+      `?id=in.(${theirs.body[0].id})&user_id=eq.${b.id}`,
+    ]) {
+      const attempt = await history(a, filter, {
+        method: "DELETE",
+        prefer: "return=representation",
+      });
+      assert.equal(attempt.status, 200);
+      assert.deepEqual(attempt.body, [], "the delete must match no row");
     }
+    assert.equal((await history(b, "?select=id")).body.length, 1);
+    assert.equal((await history(a, "?select=id")).body.length, 1);
+
+    await history(a, `?id=eq.${own.body[0].id}`, { method: "DELETE" });
+    await history(b, `?id=eq.${theirs.body[0].id}`, { method: "DELETE" });
+  });
+
+  it("removes a user's history and counters with their account, and only theirs", async () => {
+    // Room for one more started attempt, whatever the stack has counted today, and put back after
+    const restore = await saveScene(api);
+    await setLimits(api, { global_daily: 100000, global_monthly: 1000000 });
+    try {
+      const c = await createUser(api, "rls-cascade");
+      await save({ user_id: c.id, original: "keep", locale: "en" });
+      const ticket = await reserve(c);
+      assert.equal(ticket.status, 200);
+      // The ceilings count started attempts only, and a started attempt is never given back
+      assert.equal((await start(c, ticket.body)).body, true);
+      const other = await save({
+        user_id: b.id,
+        original: "someone else's",
+        locale: "en",
+      });
+      assert.equal((await reserve(b)).status, 200);
+      const counted = await globalToday(api);
+
+      await deleteUser(api, c);
+
+      for (const table of ["rewrites", "usage", "quota_reservations"]) {
+        const left = await api.service(
+          `/rest/v1/${table}?user_id=eq.${c.id}&select=user_id`,
+        );
+        assert.deepEqual(
+          left.body,
+          [],
+          `${table} still holds rows of a deleted user`,
+        );
+        const kept = await api.service(
+          `/rest/v1/${table}?user_id=eq.${b.id}&select=user_id`,
+        );
+        assert.ok(kept.body.length > 0, `${table} lost another user's rows`);
+      }
+      assert.equal(await globalToday(api), counted, "the ceilings moved");
+
+      await history(b, `?id=eq.${other.body[0].id}`, { method: "DELETE" });
+    } finally {
+      await restore();
+    }
+  });
+
+  // Account deletion relies on these: a table that held on to its rows would block it, or keep
+  // the text of someone who has left
+  it("cascades every foreign key to the accounts", () => {
+    const rows = psql(
+      `select conrelid::regclass::text || ' ' || confdeltype::text from pg_constraint
+       where contype = 'f' and confrelid = 'auth.users'::regclass
+         and connamespace = 'public'::regnamespace
+       order by 1`,
+    );
+    const tables = rows.map((row) => row.split(" ")[0]);
+    for (const table of ["quota_reservations", "rewrites", "usage"]) {
+      assert.ok(tables.includes(table), `${table} is not linked to accounts`);
+    }
+    const held = rows.filter((row) => !row.endsWith(" c"));
+    assert.deepEqual(held, [], "foreign keys that do not cascade");
   });
 });
 

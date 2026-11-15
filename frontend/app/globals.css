@@ -15,6 +15,8 @@
   --accent-text: #315acc;
   --accent-foreground: #ffffff;
   --accent-soft: color-mix(in srgb, var(--accent) 12%, transparent);
+  /* A filled button under the pointer: darker by day, lighter by night, its label still at 4.5:1 */
+  --accent-hover: color-mix(in srgb, var(--accent) 88%, black);
   --add: #137a4b;
   --add-soft: color-mix(in srgb, #1fa968 14%, transparent);
   --remove: #b4322f;
@@ -38,11 +40,15 @@
   --accent: #6c93ff;
   --accent-text: #6c93ff;
   --accent-foreground: #0a1026;
+  --accent-hover: color-mix(in srgb, var(--accent) 88%, white);
   color-scheme: dark;
 }
 
-/* Accent choices. --accent fills buttons and marks; --accent-text colours text and small icons.
-   In day mode both are tuned for at least 4.5:1 contrast, which the audit checks (npm run audit). */
+/* Accent choices. --accent fills buttons and marks, under --accent-foreground; --accent-text colours
+   text, small icons and the rings that show the focus and the active edit. In day mode the text and
+   the label on the fill are tuned for at least 4.5:1, which the audit checks with axe (npm run
+   audit). tests/accent-contrast.test.ts measures what axe does not: the rings, at 3:1, and the fill
+   under the pointer. */
 [data-accent="blue"] {
   --accent: #3b6cf6;
   --accent-text: #315acc;
@@ -101,6 +107,7 @@
   --color-accent-foreground: var(--accent-foreground);
   --color-accent-text: var(--accent-text);
   --color-accent-soft: var(--accent-soft);
+  --color-accent-hover: var(--accent-hover);
   --color-add: var(--add);
   --color-add-soft: var(--add-soft);
   --color-remove: var(--remove);
@@ -109,6 +116,7 @@
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
   --font-serif: var(--font-serif-display);
+  --animate-review-in: review-in 0.25s ease-out;
 }
 
 body {
@@ -124,8 +132,24 @@ body {
 }
 
 :focus-visible {
-  outline: 2px solid var(--accent);
+  outline: 2px solid var(--accent-text);
   outline-offset: 2px;
+}
+
+/* Forced colours take the fill away, and a filled button would be a word with no edge. The current
+   language has system colours of its own. */
+@media (forced-colors: active) {
+  :is(button, a).bg-accent:not([aria-current]) {
+    border: 1px solid ButtonBorder;
+  }
+}
+
+/* The review opens with a short fade */
+@keyframes review-in {
+  from {
+    opacity: 0;
+    transform: translateY(0.5rem);
+  }
 }
 
 /* Shimmer for the loading state */

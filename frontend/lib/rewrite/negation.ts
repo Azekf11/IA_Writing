@@ -1,4 +1,4 @@
-import { plainTypography } from "./locate";
+import { plainTypography } from "@/lib/text";
 
 const START = String.raw`(?<![\p{L}\p{N}\p{M}-])`;
 const END = String.raw`(?![\p{L}\p{N}\p{M}-])`;
@@ -35,6 +35,8 @@ const PHRASES = [
   `that${QUOTE}s not all(?=\\s*(?:[.,:;!\\u2026\\u2013\\u2014-]|$))`,
   "that is not all(?=\\s*(?:[.,:;!\\u2026\\u2013\\u2014-]|$))",
   `(?:don${QUOTE}t|do not) hesitate`,
+  `(?:don${QUOTE}t|do not) get me wrong`,
+  `(?:cannot|can not|can${QUOTE}t) (?:stress|emphasi[sz]e) (?:this|that|it) enough(?! to )`,
   "no doubt(?! remains?)",
   "no wonder(?! drugs?)",
   "no matter(?! was| were| is)",
@@ -122,6 +124,8 @@ const PHRASES = [
   "pas (?:étonnant|surprenant)",
   `n${QUOTE}est pas tout(?=\\s*(?:[.,:;!\\u2026\\u2013\\u2014-]|$))`,
   "ne nous y trompons pas",
+  "ne vous y trompez pas",
+  "on ne saurait trop insister",
   "(?:on ne peut(?: pas)?|on ne saurait|nul ne peut|personne ne peut) (?:nier|ignorer)",
   `n${QUOTE}est (?:pas|plus) un secret`,
   `(?:nul|personne) n${QUOTE}ignore`,

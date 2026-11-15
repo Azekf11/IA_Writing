@@ -18,7 +18,7 @@ export async function SiteHeader() {
         >
           {tHome("title")}
         </Link>
-        <nav className="flex gap-1">
+        <nav aria-label={t("label")} className="flex gap-1">
           <NavLink href="/">{t("home")}</NavLink>
           <NavLink href="/history">{t("history")}</NavLink>
         </nav>
